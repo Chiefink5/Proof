@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chore Logger v4</title>
+  <title>Chore Logger v5</title>
   <meta name="theme-color" content="#07111f" />
-  <link rel="stylesheet" href="styles.css?v=4.0.0" />
+  <link rel="stylesheet" href="styles.css?v=5.0.0" />
 </head>
 <body>
   <div class="app-shell">
@@ -13,8 +13,8 @@
       <p class="eyebrow">PERSONAL CHORE ACTION LOGGER</p>
       <div class="hero-row">
         <div>
-          <h1>Chore Logger <span class="version-pill">v4</span></h1>
-          <p class="subtle">No cache tricks. No service worker. Local-first and blunt.</p>
+          <h1>Chore Logger <span class="version-pill">v5</span></h1>
+          <p class="subtle">Cleaner flow, better filters, stronger proof.</p>
         </div>
       </div>
 
@@ -23,6 +23,8 @@
         <button class="btn" id="collapseAllBtn">Collapse All</button>
         <button class="btn" id="expandAllBtn">Expand All</button>
       </div>
+
+      <div id="toast" class="toast" aria-live="polite"></div>
     </header>
 
     <nav class="tabs" aria-label="Main tabs">
@@ -71,6 +73,21 @@
             <select id="logGroupFilter">
               <option value="">All groups</option>
             </select>
+            <select id="logActionFilter">
+              <option value="">All actions</option>
+              <option value="plus">Only +</option>
+              <option value="minus">Only -</option>
+            </select>
+          </div>
+          <div class="quick-filter-row">
+            <button class="chip active" data-range="all">All Time</button>
+            <button class="chip" data-range="today">Today</button>
+            <button class="chip" data-range="week">This Week</button>
+            <button class="chip" data-range="custom">Custom</button>
+          </div>
+          <div class="date-range-row hidden" id="customDateRow">
+            <input type="date" id="logDateFrom" />
+            <input type="date" id="logDateTo" />
           </div>
         </div>
         <div id="logList" class="card-stack"></div>
@@ -101,6 +118,7 @@
               Import Backup
               <input id="importInput" type="file" accept="application/json" />
             </label>
+            <button class="btn" id="backupSelfTestBtn">Backup Self-Test</button>
             <button class="btn danger" id="wipeDataBtn">Wipe All Data</button>
           </div>
           <p class="subtle">Everything saves locally in this browser on this device.</p>
@@ -137,7 +155,10 @@
         </label>
         <label>
           Time
-          <input type="time" id="manualTime" required />
+          <div class="input-with-btn">
+            <input type="time" id="manualTime" required />
+            <button type="button" class="mini-btn" id="manualNowBtn">Now</button>
+          </div>
         </label>
         <label class="full">
           Note
@@ -186,6 +207,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=4.0.0"></script>
+  <script src="app.js?v=5.0.0"></script>
 </body>
 </html>

@@ -1,10 +1,14 @@
-const STORAGE_KEY = "chore_logger_v4_data";
+
+const STORAGE_KEY = "chore_logger_v5_data";
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
 
 const STARTER_TEMPLATE = {
-  version: 4,
-  settings: {
-    collapseDefault: false
-  },
+  version: 5,
+  settings: { collapseDefault: false },
+  filters: { range: "all" },
   groups: [
     { id: uid(), name: "Kitchen", chores: [
       { id: uid(), name: "Load Dishwasher" },
@@ -55,19 +59,22 @@ const STARTER_TEMPLATE = {
     ]}
   ],
   logs: [],
-  ui: {
-    selectedGroupId: null
-  }
+  ui: { selectedGroupId: null, collapsedGroups: {}, lastManualGroupId: null }
 };
 
 let state = loadState();
+let toastTimer = null;
 
-function uid() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-}
+function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
-function deepClone(obj) {
-  return JSON.parse(JSON.stringify(obj));
+function normalizeState(parsed) {
+  parsed.settings ||= { collapseDefault: false };
+  parsed.groups ||= [];
+  parsed.logs ||= [];
+  parsed.ui ||= { selectedGroupId: null, collapsedGroups: {}, lastManualGroupId: null };
+  parsed.ui.collapsedGroups ||= {};
+  parsed.filters ||= { range: "all" };
+  return parsed;
 }
 
 function loadState() {
@@ -78,12 +85,7 @@ function loadState() {
     return seeded;
   }
   try {
-    const parsed = JSON.parse(raw);
-    parsed.settings ||= { collapseDefault: false };
-    parsed.groups ||= [];
-    parsed.logs ||= [];
-    parsed.ui ||= { selectedGroupId: null };
-    return parsed;
+    return normalizeState(JSON.parse(raw));
   } catch {
     const seeded = deepClone(STARTER_TEMPLATE);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
@@ -91,8 +93,14 @@ function loadState() {
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 1700);
 }
 
 function formatDate(dateString) {
@@ -107,9 +115,8 @@ function formatDateTime(dateString, timeString) {
 
 function todayParts() {
   const now = new Date();
-  const date = now.toISOString().slice(0, 10);
-  const time = now.toTimeString().slice(0, 5);
-  return { date, time };
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return { date: local.toISOString().slice(0, 10), time: local.toISOString().slice(11, 16) };
 }
 
 function switchTab(tabName) {
@@ -117,49 +124,48 @@ function switchTab(tabName) {
   document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active", panel.id === `${tabName}Tab`));
 }
 
-function getGroupById(groupId) {
-  return state.groups.find(g => g.id === groupId);
-}
+function getGroupById(groupId) { return state.groups.find(g => g.id === groupId); }
 
 function getChoreByIds(groupId, choreId) {
   const group = getGroupById(groupId);
-  if (!group) return null;
-  return group.chores.find(ch => ch.id === choreId) || null;
+  return group ? group.chores.find(ch => ch.id === choreId) || null : null;
 }
 
 function getLastLog(groupId, choreId) {
-  const filtered = state.logs.filter(log => log.groupId === groupId && log.choreId === choreId);
-  return filtered.sort((a,b) => b.createdAt.localeCompare(a.createdAt))[0];
+  return state.logs
+    .filter(log => log.groupId === groupId && log.choreId === choreId)
+    .sort((a,b) => b.createdAt.localeCompare(a.createdAt))[0];
 }
 
-function addLog({ groupId, choreId, action = "plus", date, time, note = "", manual = false }) {
+function getGroupLogs(groupId) { return state.logs.filter(log => log.groupId === groupId); }
+function getGroupTodayCount(groupId) { return state.logs.filter(log => log.groupId === groupId && log.date === todayParts().date).length; }
+function getGroupLastTouched(groupId) { return getGroupLogs(groupId).sort((a,b) => b.createdAt.localeCompare(a.createdAt))[0] || null; }
+
+function addLog({ groupId, choreId, action = "plus", date, time, note = "", manual = false, sourceBtn = null }) {
   const group = getGroupById(groupId);
   const chore = getChoreByIds(groupId, choreId);
   if (!group || !chore) return;
   state.logs.unshift({
-    id: uid(),
-    groupId,
-    choreId,
-    groupName: group.name,
-    choreName: chore.name,
-    action,
-    date,
-    time,
-    note: note.trim(),
-    manual,
-    createdAt: new Date().toISOString()
+    id: uid(), groupId, choreId, groupName: group.name, choreName: chore.name,
+    action, date, time, note: note.trim(), manual, createdAt: new Date().toISOString()
   });
+  state.ui.lastManualGroupId = groupId;
   saveState();
+  if (sourceBtn) {
+    sourceBtn.classList.add("pulse");
+    setTimeout(() => sourceBtn.classList.remove("pulse"), 220);
+  }
+  showToast(`Logged: ${group.name} / ${chore.name} ${action === "plus" ? "+" : "-"}`);
   renderAll();
 }
 
 function getStats() {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-
+  const today = todayParts().date;
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - now.getDay());
-  const weekStartKey = weekStart.toISOString().slice(0, 10);
+  const weekLocal = new Date(weekStart.getTime() - weekStart.getTimezoneOffset() * 60000);
+  const weekStartKey = weekLocal.toISOString().slice(0, 10);
 
   const todayCount = state.logs.filter(log => log.date === today).length;
   const weekCount = state.logs.filter(log => log.date >= weekStartKey).length;
@@ -167,17 +173,13 @@ function getStats() {
   const uniqueDays = [...new Set(state.logs.map(log => log.date))].sort().reverse();
   let streak = 0;
   let cursor = new Date(today + "T00:00:00");
-
-  for (const day of uniqueDays) {
+  for (;;) {
     const key = cursor.toISOString().slice(0, 10);
-    if (day === key) {
+    if (uniqueDays.includes(key)) {
       streak++;
       cursor.setDate(cursor.getDate() - 1);
-    } else if (day < key) {
-      break;
-    }
+    } else break;
   }
-
   return { todayCount, weekCount, streak };
 }
 
@@ -186,15 +188,38 @@ function renderHome() {
   container.innerHTML = "";
 
   state.groups.forEach(group => {
+    const last = getGroupLastTouched(group.id);
+    const todayCount = getGroupTodayCount(group.id);
+    const total = group.chores.length || 1;
+    const percent = Math.min(100, Math.round((todayCount / total) * 100));
+    const isCollapsed = !!state.ui.collapsedGroups[group.id];
+
     const card = document.createElement("article");
-    card.className = "group-card";
+    card.className = `group-card ${isCollapsed ? "collapsed" : ""}`;
     card.innerHTML = `
       <div class="group-line">
         <div>
           <h3>${escapeHtml(group.name)}</h3>
           <p>${group.chores.length} sub-chore${group.chores.length === 1 ? "" : "s"}</p>
         </div>
-        <button class="group-open" data-group-open="${group.id}" aria-label="Open ${escapeHtml(group.name)}">›</button>
+        <div class="home-cta">
+          <button class="btn" data-toggle-collapse="${group.id}">${isCollapsed ? "Expand" : "Collapse"}</button>
+          <button class="group-open" data-group-open="${group.id}" aria-label="Open ${escapeHtml(group.name)}">›</button>
+        </div>
+      </div>
+      <div class="group-details">
+        <div class="home-meta">
+          <div class="pill">Today: ${todayCount}</div>
+          <div class="pill">${last ? `Last: ${formatDateTime(last.date, last.time)}` : "No logs yet"}</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${percent}%"></div></div>
+        <div class="group-mini-list">
+          ${group.chores.slice(0,3).map(chore => {
+            const lastLog = getLastLog(group.id, chore.id);
+            return `<div class="group-mini-item"><span>${escapeHtml(chore.name)}</span><span>${lastLog ? `${lastLog.action === "plus" ? "+" : "-"} ${lastLog.time}` : "—"}</span></div>`;
+          }).join("")}
+          ${group.chores.length > 3 ? `<div class="group-mini-item"><span>More chores</span><span>+${group.chores.length - 3}</span></div>` : ""}
+        </div>
       </div>
     `;
     container.appendChild(card);
@@ -206,6 +231,15 @@ function renderHome() {
       saveState();
       renderGroupView();
       switchTab("group");
+    });
+  });
+
+  container.querySelectorAll("[data-toggle-collapse]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.toggleCollapse;
+      state.ui.collapsedGroups[id] = !state.ui.collapsedGroups[id];
+      saveState();
+      renderHome();
     });
   });
 }
@@ -224,7 +258,7 @@ function renderGroupView() {
   }
 
   title.textContent = group.name;
-  subtitle.textContent = `${group.chores.length} sub-chore${group.chores.length === 1 ? "" : "s"}`;
+  subtitle.textContent = `${group.chores.length} sub-chore${group.chores.length === 1 ? "" : "s"} • ${getGroupTodayCount(group.id)} logged today`;
 
   group.chores.forEach(chore => {
     const last = getLastLog(group.id, chore.id);
@@ -255,7 +289,8 @@ function renderGroupView() {
         action: btn.dataset.logAction,
         date: parts.date,
         time: parts.time,
-        manual: false
+        manual: false,
+        sourceBtn: btn
       });
     });
   });
@@ -285,22 +320,45 @@ function renderLogFilters() {
   select.value = current;
 }
 
+function getFilteredLogs() {
+  const search = document.getElementById("logSearch").value.trim().toLowerCase();
+  const groupFilter = document.getElementById("logGroupFilter").value;
+  const actionFilter = document.getElementById("logActionFilter").value;
+  const range = state.filters.range || "all";
+  const from = document.getElementById("logDateFrom").value;
+  const to = document.getElementById("logDateTo").value;
+  const today = todayParts().date;
+
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  const weekLocal = new Date(weekStart.getTime() - weekStart.getTimezoneOffset() * 60000);
+  const weekStartKey = weekLocal.toISOString().slice(0, 10);
+
+  return state.logs.filter(log => {
+    const matchesSearch = !search || [log.groupName, log.choreName, log.note].join(" ").toLowerCase().includes(search);
+    const matchesGroup = !groupFilter || log.groupId === groupFilter;
+    const matchesAction = !actionFilter || log.action === actionFilter;
+    let matchesRange = true;
+    if (range === "today") matchesRange = log.date === today;
+    if (range === "week") matchesRange = log.date >= weekStartKey;
+    if (range === "custom") {
+      if (from) matchesRange = matchesRange && log.date >= from;
+      if (to) matchesRange = matchesRange && log.date <= to;
+    }
+    return matchesSearch && matchesGroup && matchesAction && matchesRange;
+  });
+}
+
 function renderLogs() {
   const list = document.getElementById("logList");
   list.innerHTML = "";
-  const search = document.getElementById("logSearch").value.trim().toLowerCase();
-  const groupFilter = document.getElementById("logGroupFilter").value;
-
-  const logs = state.logs.filter(log => {
-    const matchesSearch = !search || [log.groupName, log.choreName, log.note].join(" ").toLowerCase().includes(search);
-    const matchesGroup = !groupFilter || log.groupId === groupFilter;
-    return matchesSearch && matchesGroup;
-  });
+  const logs = getFilteredLogs();
 
   if (!logs.length) {
     const empty = document.createElement("div");
     empty.className = "card";
-    empty.innerHTML = `<p>No log entries yet.</p>`;
+    empty.innerHTML = `<p>No log entries match this filter.</p>`;
     list.appendChild(empty);
     return;
   }
@@ -324,7 +382,7 @@ function renderLogs() {
             <h4>${escapeHtml(log.choreName)}</h4>
             <p>${escapeHtml(log.groupName)}</p>
           </div>
-          <div class="pill">${log.action === "plus" ? "+" : "-"} • ${formatDateTime(log.date, log.time)}</div>
+          <div class="pill ${log.action}">${log.action === "plus" ? "+" : "-"} • ${formatDateTime(log.date, log.time)}</div>
         </div>
         ${log.note ? `<p>${escapeHtml(log.note)}</p>` : ""}
         <div class="log-actions">
@@ -344,6 +402,7 @@ function renderLogs() {
       state.logs = state.logs.filter(log => log.id !== id);
       saveState();
       renderAll();
+      showToast("Log entry deleted");
     });
   });
 
@@ -355,7 +414,6 @@ function renderLogs() {
 function renderManage() {
   const container = document.getElementById("manageGroups");
   container.innerHTML = "";
-
   state.groups.forEach(group => {
     const card = document.createElement("article");
     card.className = "manage-group-card";
@@ -367,12 +425,10 @@ function renderManage() {
           <button class="btn danger" data-delete-group="${group.id}">Delete</button>
         </div>
       </div>
-
       <form class="inline-form" data-add-chore-form="${group.id}">
         <input type="text" name="choreName" maxlength="60" placeholder="New sub-chore for ${escapeHtml(group.name)}" />
         <button class="btn btn-primary" type="submit">Add Sub-chore</button>
       </form>
-
       <div class="sub-list">
         ${group.chores.map(ch => `
           <div class="sub-item">
@@ -400,6 +456,7 @@ function renderManage() {
       input.value = "";
       saveState();
       renderAll();
+      showToast("Sub-chore added");
     });
   });
 
@@ -412,6 +469,7 @@ function renderManage() {
       state.logs.forEach(log => { if (log.groupId === group.id) log.groupName = group.name; });
       saveState();
       renderAll();
+      showToast("Group renamed");
     });
   });
 
@@ -423,8 +481,10 @@ function renderManage() {
       state.groups = state.groups.filter(g => g.id !== groupId);
       state.logs = state.logs.filter(log => log.groupId !== groupId);
       if (state.ui.selectedGroupId === groupId) state.ui.selectedGroupId = null;
+      delete state.ui.collapsedGroups[groupId];
       saveState();
       renderAll();
+      showToast("Group deleted");
     });
   });
 
@@ -438,6 +498,7 @@ function renderManage() {
       state.logs.forEach(log => { if (log.choreId === chore.id) log.choreName = chore.name; });
       saveState();
       renderAll();
+      showToast("Sub-chore renamed");
     });
   });
 
@@ -451,6 +512,7 @@ function renderManage() {
       state.logs = state.logs.filter(log => log.choreId !== choreId);
       saveState();
       renderAll();
+      showToast("Sub-chore deleted");
     });
   });
 }
@@ -466,11 +528,16 @@ function populateManualOptions(groupId, choreId) {
     groupSelect.appendChild(option);
   });
 
-  const selectedGroupId = groupId || state.ui.selectedGroupId || state.groups[0]?.id;
+  const selectedGroupId = groupId || state.ui.lastManualGroupId || state.ui.selectedGroupId || state.groups[0]?.id;
+  if (!selectedGroupId) return;
   groupSelect.value = selectedGroupId;
   populateManualChoreOptions(selectedGroupId, choreId);
 
-  groupSelect.onchange = () => populateManualChoreOptions(groupSelect.value);
+  groupSelect.onchange = () => {
+    state.ui.lastManualGroupId = groupSelect.value;
+    saveState();
+    populateManualChoreOptions(groupSelect.value);
+  };
 }
 
 function populateManualChoreOptions(groupId, selectedChoreId = null) {
@@ -497,9 +564,7 @@ function openManualDialog(groupId = null, choreId = null) {
   dialog.showModal();
 }
 
-function closeManualDialog() {
-  document.getElementById("manualDialog").close();
-}
+function closeManualDialog() { document.getElementById("manualDialog").close(); }
 
 function openEditDialog(logId) {
   const log = state.logs.find(item => item.id === logId);
@@ -512,9 +577,7 @@ function openEditDialog(logId) {
   document.getElementById("editLogDialog").showModal();
 }
 
-function closeEditDialog() {
-  document.getElementById("editLogDialog").close();
-}
+function closeEditDialog() { document.getElementById("editLogDialog").close(); }
 
 function exportBackup() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
@@ -524,6 +587,7 @@ function exportBackup() {
   anchor.download = `chore-backup-${new Date().toISOString().slice(0,10)}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
+  showToast("Backup exported");
 }
 
 function importBackup(file) {
@@ -531,16 +595,12 @@ function importBackup(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const parsed = JSON.parse(reader.result);
-      if (!Array.isArray(parsed.groups) || !Array.isArray(parsed.logs)) {
-        throw new Error("Invalid backup shape");
-      }
+      const parsed = normalizeState(JSON.parse(reader.result));
+      if (!Array.isArray(parsed.groups) || !Array.isArray(parsed.logs)) throw new Error("Invalid backup");
       state = parsed;
-      state.settings ||= { collapseDefault: false };
-      state.ui ||= { selectedGroupId: null };
       saveState();
       renderAll();
-      alert("Backup imported.");
+      showToast("Backup imported");
     } catch {
       alert("That backup file is invalid.");
     }
@@ -553,6 +613,7 @@ function restoreStarterTemplate() {
   state = deepClone(STARTER_TEMPLATE);
   saveState();
   renderAll();
+  showToast("Starter template restored");
 }
 
 function wipeAllData() {
@@ -563,15 +624,31 @@ function wipeAllData() {
   state.ui.selectedGroupId = null;
   saveState();
   renderAll();
+  showToast("All data wiped");
+}
+
+function backupSelfTest() {
+  try {
+    const parsed = normalizeState(JSON.parse(JSON.stringify(state)));
+    if (!Array.isArray(parsed.groups) || !Array.isArray(parsed.logs)) throw new Error();
+    showToast("Backup self-test passed");
+  } catch {
+    alert("Backup self-test failed.");
+  }
+}
+
+function setRange(range) {
+  state.filters.range = range;
+  saveState();
+  document.querySelectorAll("[data-range]").forEach(btn => btn.classList.toggle("active", btn.dataset.range === range));
+  document.getElementById("customDateRow").classList.toggle("hidden", range !== "custom");
+  renderLogs();
 }
 
 function escapeHtml(value) {
   return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function renderAll() {
@@ -582,21 +659,20 @@ function renderAll() {
   renderLogs();
   renderManage();
   document.getElementById("collapseDefaultToggle").checked = !!state.settings.collapseDefault;
+  document.querySelectorAll("[data-range]").forEach(btn => btn.classList.toggle("active", btn.dataset.range === (state.filters.range || "all")));
+  document.getElementById("customDateRow").classList.toggle("hidden", (state.filters.range || "all") !== "custom");
 }
 
-document.querySelectorAll(".tab").forEach(btn => {
-  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
-});
-
+document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 document.getElementById("manualEntryBtnTop").addEventListener("click", () => openManualDialog());
+
 document.getElementById("collapseAllBtn").addEventListener("click", () => {
-  switchTab("home");
-  document.querySelectorAll("[data-group-open]").forEach(() => {});
-  alert("Home is already compact in v4. Tap a group to open it.");
+  state.groups.forEach(group => state.ui.collapsedGroups[group.id] = true);
+  saveState(); switchTab("home"); renderHome(); showToast("All home cards collapsed");
 });
 document.getElementById("expandAllBtn").addEventListener("click", () => {
-  switchTab("home");
-  alert("v4 uses a cleaner group page instead of giant expanded lists.");
+  state.groups.forEach(group => state.ui.collapsedGroups[group.id] = false);
+  saveState(); switchTab("home"); renderHome(); showToast("All home cards expanded");
 });
 document.getElementById("backToHomeBtn").addEventListener("click", () => switchTab("home"));
 
@@ -605,10 +681,11 @@ document.getElementById("groupForm").addEventListener("submit", (e) => {
   const input = document.getElementById("newGroupName");
   const value = input.value.trim();
   if (!value) return;
-  state.groups.push({ id: uid(), name: value, chores: [] });
+  const newGroup = { id: uid(), name: value, chores: [] };
+  state.groups.push(newGroup);
+  state.ui.collapsedGroups[newGroup.id] = !!state.settings.collapseDefault;
   input.value = "";
-  saveState();
-  renderAll();
+  saveState(); renderAll(); showToast("Group added");
 });
 
 document.getElementById("manualForm").addEventListener("submit", (e) => {
@@ -634,9 +711,7 @@ document.getElementById("editLogForm").addEventListener("submit", (e) => {
   log.date = document.getElementById("editDate").value;
   log.time = document.getElementById("editTime").value;
   log.note = document.getElementById("editNote").value.trim();
-  saveState();
-  renderAll();
-  closeEditDialog();
+  saveState(); renderAll(); closeEditDialog(); showToast("Log updated");
 });
 
 document.getElementById("closeManualDialog").addEventListener("click", closeManualDialog);
@@ -644,16 +719,35 @@ document.getElementById("cancelManualDialog").addEventListener("click", closeMan
 document.getElementById("closeEditDialog").addEventListener("click", closeEditDialog);
 document.getElementById("cancelEditDialog").addEventListener("click", closeEditDialog);
 
+document.getElementById("manualNowBtn").addEventListener("click", () => {
+  const parts = todayParts();
+  document.getElementById("manualDate").value = parts.date;
+  document.getElementById("manualTime").value = parts.time;
+});
+
 document.getElementById("logSearch").addEventListener("input", renderLogs);
 document.getElementById("logGroupFilter").addEventListener("change", renderLogs);
+document.getElementById("logActionFilter").addEventListener("change", renderLogs);
+document.getElementById("logDateFrom").addEventListener("change", renderLogs);
+document.getElementById("logDateTo").addEventListener("change", renderLogs);
+document.querySelectorAll("[data-range]").forEach(btn => btn.addEventListener("click", () => setRange(btn.dataset.range)));
 
 document.getElementById("restoreTemplateBtn").addEventListener("click", restoreStarterTemplate);
 document.getElementById("exportBtn").addEventListener("click", exportBackup);
 document.getElementById("importInput").addEventListener("change", (e) => importBackup(e.target.files[0]));
 document.getElementById("wipeDataBtn").addEventListener("click", wipeAllData);
+document.getElementById("backupSelfTestBtn").addEventListener("click", backupSelfTest);
 document.getElementById("collapseDefaultToggle").addEventListener("change", (e) => {
   state.settings.collapseDefault = e.target.checked;
   saveState();
+  showToast("Default collapse setting updated");
 });
+
+(function applyDefaultCollapse() {
+  if (Object.keys(state.ui.collapsedGroups || {}).length === 0) {
+    state.groups.forEach(group => state.ui.collapsedGroups[group.id] = !!state.settings.collapseDefault);
+    saveState();
+  }
+})();
 
 renderAll();

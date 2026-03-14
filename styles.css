@@ -99,3 +99,13 @@ h1, h2, h3, p { margin: 0; }
   .sub-actions { justify-content: flex-start; }
   .manage-sub-row { grid-template-columns: 1fr; }
 }
+
+
+.version-badge { font-size: .9rem; color: var(--accent); border: 1px solid rgba(121,242,192,.35); padding: .2rem .5rem; border-radius: 999px; vertical-align: middle; }
+.group-link-btn { width: 100%; background: transparent; border: 0; color: inherit; padding: 0; text-align: left; }
+.group-open-arrow { pointer-events: none; }
+.group-detail-head { display:flex; align-items:center; gap:.75rem; }
+#groupDetailList .sub-row { grid-template-columns: minmax(0,1fr) auto; display:grid; }
+@media (max-width: 720px) {
+  #groupDetailList .sub-row { grid-template-columns: 1fr; }
+}

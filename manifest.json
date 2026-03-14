@@ -1,6 +1,6 @@
 {
-  "name": "Chore Logger",
-  "short_name": "ChoreLogger",
+  "name": "Chore Logger v3",
+  "short_name": "ChoreLog v3",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f1115",

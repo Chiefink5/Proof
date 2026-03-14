@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'choreLoggerV1';
-const DATA_VERSION = 2;
+const STORAGE_KEY = 'choreLoggerV3';
+const DATA_VERSION = 3;
 
 const DEFAULT_TEMPLATE = {
   settings: { collapseByDefault: true },
@@ -34,6 +34,7 @@ function buildSeedState() {
 }
 
 let state = loadState();
+let currentGroupId = null;
 
 const els = {
   tabs: [...document.querySelectorAll('.tab')],
@@ -69,6 +70,11 @@ const els = {
   importDataInput: document.getElementById('importDataInput'),
   collapseAllBtn: document.getElementById('collapseAllBtn'),
   expandAllBtn: document.getElementById('expandAllBtn'),
+  backToHomeBtn: document.getElementById('backToHomeBtn'),
+  groupDetailTitle: document.getElementById('groupDetailTitle'),
+  groupDetailMeta: document.getElementById('groupDetailMeta'),
+  groupDetailToday: document.getElementById('groupDetailToday'),
+  groupDetailList: document.getElementById('groupDetailList'),
 };
 
 boot();
@@ -101,6 +107,7 @@ function bindEvents() {
   els.collapseAllBtn.addEventListener('click', () => toggleAllGroups(true));
   els.expandAllBtn.addEventListener('click', () => toggleAllGroups(false));
   els.restoreDefaultsBtn.addEventListener('click', restoreDefaults);
+  els.backToHomeBtn.addEventListener('click', () => switchView('homeView'));
   els.resetDataBtn.addEventListener('click', () => {
     if (!confirm('Wipe all groups, sub-chores, and logs?')) return;
     localStorage.removeItem(STORAGE_KEY);
@@ -190,6 +197,7 @@ function renderAll() {
   renderLogFilters();
   renderLogView();
   renderStats();
+  renderGroupDetailView();
   els.collapseByDefault.checked = !!state.settings.collapseByDefault;
 }
 
@@ -209,40 +217,12 @@ function renderHomeView() {
   activeGroups.forEach(group => {
     const node = tpl.content.firstElementChild.cloneNode(true);
     node.dataset.groupId = group.id;
-    if (state.settings.collapseByDefault) node.classList.add('collapsed');
     const activeSubs = sortedSubs(group);
     const todayDone = countLogsForGroupToday(group.id);
     node.querySelector('.group-name').textContent = group.name;
     node.querySelector('.group-meta').textContent = `${activeSubs.length} sub-chores`;
     node.querySelector('.group-today').textContent = `${todayDone} today`;
-    const toggleBtn = node.querySelector('.toggle-group');
-    toggleBtn.addEventListener('click', () => node.classList.toggle('collapsed'));
-
-    const subList = node.querySelector('.sub-list');
-    if (!activeSubs.length) {
-      subList.innerHTML = `<div class="empty">No sub-chores in this group yet.</div>`;
-    } else {
-      activeSubs.forEach(sub => {
-        const last = getLastLog(group.id, sub.id);
-        const row = document.createElement('div');
-        row.className = 'sub-row';
-        row.innerHTML = `
-          <div class="sub-copy">
-            <strong>${escapeHtml(sub.name)}</strong>
-            <p class="muted small">${last ? `Last: ${formatEffective(last)}` : 'No logs yet'}</p>
-          </div>
-          <div class="sub-actions">
-            <button class="action-btn minus" aria-label="Log minus">−</button>
-            <button class="action-btn plus" aria-label="Log plus">+</button>
-            <button class="mini-btn">Manual</button>
-          </div>
-        `;
-        row.querySelector('.plus').addEventListener('click', () => quickLog(group.id, sub.id, 'plus'));
-        row.querySelector('.minus').addEventListener('click', () => quickLog(group.id, sub.id, 'minus'));
-        row.querySelector('.mini-btn').addEventListener('click', () => openManualDialog({ groupId: group.id, subChoreId: sub.id }));
-        subList.appendChild(row);
-      });
-    }
+    node.querySelector('.group-link-btn').addEventListener('click', () => openGroupDetail(group.id));
     els.groupsContainer.appendChild(node);
   });
 }
@@ -365,6 +345,54 @@ function renderLogView() {
   });
 }
 
+
+function openGroupDetail(groupId) {
+  currentGroupId = groupId;
+  renderGroupDetailView();
+  switchView('groupView');
+}
+
+function renderGroupDetailView() {
+  const group = state.groups.find(g => g.id === currentGroupId) || sortedGroups()[0];
+  if (!group) {
+    els.groupDetailTitle.textContent = 'Group';
+    els.groupDetailMeta.textContent = 'No group selected';
+    els.groupDetailToday.textContent = '0 today';
+    els.groupDetailList.innerHTML = '<div class="empty">No group selected.</div>';
+    return;
+  }
+  currentGroupId = group.id;
+  const activeSubs = sortedSubs(group);
+  els.groupDetailTitle.textContent = group.name;
+  els.groupDetailMeta.textContent = `${activeSubs.length} sub-chores`;
+  els.groupDetailToday.textContent = `${countLogsForGroupToday(group.id)} today`;
+  els.groupDetailList.innerHTML = '';
+  if (!activeSubs.length) {
+    els.groupDetailList.innerHTML = '<div class="empty">No sub-chores in this group yet.</div>';
+    return;
+  }
+  activeSubs.forEach(sub => {
+    const last = getLastLog(group.id, sub.id);
+    const row = document.createElement('div');
+    row.className = 'sub-row';
+    row.innerHTML = `
+      <div class="sub-copy">
+        <strong>${escapeHtml(sub.name)}</strong>
+        <p class="muted small">${last ? `Last: ${formatEffective(last)}` : 'No logs yet'}</p>
+      </div>
+      <div class="sub-actions">
+        <button class="action-btn minus" aria-label="Log minus">−</button>
+        <button class="action-btn plus" aria-label="Log plus">+</button>
+        <button class="mini-btn">Manual</button>
+      </div>
+    `;
+    row.querySelector('.plus').addEventListener('click', () => quickLog(group.id, sub.id, 'plus'));
+    row.querySelector('.minus').addEventListener('click', () => quickLog(group.id, sub.id, 'minus'));
+    row.querySelector('.mini-btn').addEventListener('click', () => openManualDialog({ groupId: group.id, subChoreId: sub.id }));
+    els.groupDetailList.appendChild(row);
+  });
+}
+
 function renderStats() {
   const today = todayString();
   const weekAgo = offsetDateString(-6);
@@ -421,6 +449,7 @@ function moveSub(groupId, subId, delta) {
 function quickLog(groupId, subChoreId, actionType) {
   addLog({ groupId, subChoreId, actionType, amount: 1, effectiveDate: todayString(), effectiveTime: nowTimeString(), note: '', isManualEntry: false });
   renderAll();
+  if (currentGroupId === groupId) renderGroupDetailView();
 }
 
 function addLog({ groupId, subChoreId, actionType, amount, effectiveDate, effectiveTime, note, isManualEntry }) {
@@ -551,7 +580,12 @@ async function importBackup(event) {
 }
 
 function toggleAllGroups(collapse = true) {
-  document.querySelectorAll('.group-card').forEach(card => card.classList.toggle('collapsed', collapse));
+  if (collapse) {
+    switchView('homeView');
+  } else {
+    const first = sortedGroups()[0];
+    if (first) openGroupDetail(first.id);
+  }
 }
 
 function countLogsForGroupToday(groupId) {

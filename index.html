@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f1115" />
-  <title>Chore Logger</title>
+  <title>Chore Logger v3</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -13,12 +13,12 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Personal chore action logger</p>
-        <h1>Chore Logger</h1>
+        <h1>Chore Logger <span class="version-badge">v3</span></h1>
       </div>
       <div class="header-actions">
+        <button id="openManualBtn" class="primary-btn">Manual Entry</button>
         <button id="collapseAllBtn" class="ghost-btn">Collapse All</button>
         <button id="expandAllBtn" class="ghost-btn">Expand All</button>
-        <button id="openManualBtn" class="primary-btn">Manual Entry</button>
       </div>
     </header>
 
@@ -75,6 +75,21 @@
         <div id="manageGroupsContainer" class="stack"></div>
       </section>
 
+
+      <section id="groupView" class="view">
+        <div class="card stack gap-md">
+          <div class="group-detail-head">
+            <button id="backToHomeBtn" class="ghost-btn">← Back</button>
+            <div class="grow">
+              <h2 id="groupDetailTitle">Group</h2>
+              <p id="groupDetailMeta" class="muted small"></p>
+            </div>
+            <span id="groupDetailToday" class="group-pill">0 today</span>
+          </div>
+          <div id="groupDetailList" class="stack"></div>
+        </div>
+      </section>
+
       <section id="settingsView" class="view">
         <div class="card stack gap-md">
           <h2>Settings</h2>
@@ -128,18 +143,19 @@
   </dialog>
 
   <template id="groupCardTemplate">
-    <article class="card group-card">
-      <div class="group-head">
-        <div class="group-heading-copy">
-          <h2 class="group-name"></h2>
-          <div class="group-heading-meta">
-            <p class="muted small group-meta"></p>
-            <span class="group-pill group-today">0 today</span>
+    <article class="card group-card group-link-card">
+      <button class="group-link-btn" type="button">
+        <div class="group-head">
+          <div class="group-heading-copy">
+            <h2 class="group-name"></h2>
+            <div class="group-heading-meta">
+              <p class="muted small group-meta"></p>
+              <span class="group-pill group-today">0 today</span>
+            </div>
           </div>
+          <span class="icon-btn group-open-arrow" aria-hidden="true">›</span>
         </div>
-        <button class="icon-btn toggle-group" title="Collapse or expand">⌄</button>
-      </div>
-      <div class="sub-list"></div>
+      </button>
     </article>
   </template>
 

@@ -1,4 +1,4 @@
-const CACHE = 'chore-logger-v1';
+const CACHE = 'chore-logger-v3';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

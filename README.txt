@@ -18,3 +18,7 @@ Notes:
 - Data is stored locally in browser localStorage.
 - If you move browsers/devices, the data will not move with it unless you add a backend later.
 - PWA install support is included, but icons are not yet included.
+
+
+Version: v3
+Updates: visible version label, group detail page, starter template restore, export/import backup, settings polish.

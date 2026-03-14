@@ -1,673 +1,659 @@
-const STORAGE_KEY = 'choreLoggerV3';
-const DATA_VERSION = 3;
+const STORAGE_KEY = "chore_logger_v4_data";
 
-const DEFAULT_TEMPLATE = {
-  settings: { collapseByDefault: true },
+const STARTER_TEMPLATE = {
+  version: 4,
+  settings: {
+    collapseDefault: false
+  },
   groups: [
-    { name: 'Kitchen', chores: ['Load Dishwasher', 'Take out Trash', 'Wipe Counters', 'Wipe Tables', 'Clean Stove', 'Sweep', 'Mop'] },
-    { name: 'Bentleys Bathroom', chores: ['Clean Toilet', 'Clean Sink', 'Clean Mirror', 'Pick up Clothes', 'Pick up Toys', 'Take out Trash'] },
-    { name: 'Master Bedroom', chores: ['Make the Bed', 'Pick up Trash', 'Gather Dog Toys', 'Gather Dishes', 'Vacuum'] },
-    { name: 'Master Bath', chores: ['Pick up Clothes', 'Clean Sink', 'Clean Shower', 'Organize Counter', 'Sweep', 'Clean Toilet', 'Clean Mirror', 'Take out Trash'] },
-    { name: 'Dogs', chores: ['(AM) Lets Dogs Out', '(AM) Feed Dogs', '(AM) Let Broadie Out', '(AM) Feed Broadie', '(PM) Let Dogs Out', '(PM) Feed Dogs', '(PM) Let Broadie Out', '(PM) Feed Broadie'] },
-    { name: 'Car', chores: ['Clean Out Interior'] },
+    { id: uid(), name: "Kitchen", chores: [
+      { id: uid(), name: "Load Dishwasher" },
+      { id: uid(), name: "Take out Trash" },
+      { id: uid(), name: "Wipe Counters" },
+      { id: uid(), name: "Wipe Tables" },
+      { id: uid(), name: "Clean Stove" },
+      { id: uid(), name: "Sweep" },
+      { id: uid(), name: "Mop" }
+    ]},
+    { id: uid(), name: "Bentleys Bathroom", chores: [
+      { id: uid(), name: "Clean Toilet" },
+      { id: uid(), name: "Clean Sink" },
+      { id: uid(), name: "Clean Mirror" },
+      { id: uid(), name: "Pick up Clothes" },
+      { id: uid(), name: "Pick up Toys" },
+      { id: uid(), name: "Take out Trash" }
+    ]},
+    { id: uid(), name: "Master Bedroom", chores: [
+      { id: uid(), name: "Make the Bed" },
+      { id: uid(), name: "Pick up Trash" },
+      { id: uid(), name: "Gather Dog Toys" },
+      { id: uid(), name: "Gather Dishes" },
+      { id: uid(), name: "Vacuum" }
+    ]},
+    { id: uid(), name: "Master Bath", chores: [
+      { id: uid(), name: "Pick up Clothes" },
+      { id: uid(), name: "Clean Sink" },
+      { id: uid(), name: "Clean Shower" },
+      { id: uid(), name: "Organize Counter" },
+      { id: uid(), name: "Sweep" },
+      { id: uid(), name: "Clean Toilet" },
+      { id: uid(), name: "Clean Mirror" },
+      { id: uid(), name: "Take out Trash" }
+    ]},
+    { id: uid(), name: "Dogs", chores: [
+      { id: uid(), name: "(AM) Lets Dogs Out" },
+      { id: uid(), name: "(AM) Feed Dogs" },
+      { id: uid(), name: "(AM) Let Broadie Out" },
+      { id: uid(), name: "(AM) Feed Broadie" },
+      { id: uid(), name: "(PM) Let Dogs Out" },
+      { id: uid(), name: "(PM) Feed Dogs" },
+      { id: uid(), name: "(PM) Let Broadie Out" },
+      { id: uid(), name: "(PM) Feed Broadie" }
+    ]},
+    { id: uid(), name: "Car", chores: [
+      { id: uid(), name: "Clean Out Interior" }
+    ]}
   ],
+  logs: [],
+  ui: {
+    selectedGroupId: null
+  }
 };
-
-function buildSeedState() {
-  return {
-    version: DATA_VERSION,
-    settings: { collapseByDefault: !!DEFAULT_TEMPLATE.settings.collapseByDefault },
-    groups: DEFAULT_TEMPLATE.groups.map((group, groupIndex) => ({
-      id: crypto.randomUUID(),
-      name: group.name,
-      archived: false,
-      sortOrder: groupIndex + 1,
-      subChores: group.chores.map((name, subIndex) => ({
-        id: crypto.randomUUID(),
-        name,
-        archived: false,
-        sortOrder: subIndex + 1,
-      })),
-    })),
-    logs: [],
-  };
-}
 
 let state = loadState();
-let currentGroupId = null;
 
-const els = {
-  tabs: [...document.querySelectorAll('.tab')],
-  views: [...document.querySelectorAll('.view')],
-  groupsContainer: document.getElementById('groupsContainer'),
-  manageGroupsContainer: document.getElementById('manageGroupsContainer'),
-  logContainer: document.getElementById('logContainer'),
-  addGroupBtn: document.getElementById('addGroupBtn'),
-  newGroupName: document.getElementById('newGroupName'),
-  todayCount: document.getElementById('todayCount'),
-  weekCount: document.getElementById('weekCount'),
-  streakCount: document.getElementById('streakCount'),
-  manualDialog: document.getElementById('manualDialog'),
-  manualForm: document.getElementById('manualForm'),
-  manualTitle: document.getElementById('manualTitle'),
-  manualGroup: document.getElementById('manualGroup'),
-  manualSubChore: document.getElementById('manualSubChore'),
-  manualAction: document.getElementById('manualAction'),
-  manualAmount: document.getElementById('manualAmount'),
-  manualDate: document.getElementById('manualDate'),
-  manualTime: document.getElementById('manualTime'),
-  manualNote: document.getElementById('manualNote'),
-  editingLogId: document.getElementById('editingLogId'),
-  openManualBtn: document.getElementById('openManualBtn'),
-  filterGroup: document.getElementById('filterGroup'),
-  searchLog: document.getElementById('searchLog'),
-  filterFrom: document.getElementById('filterFrom'),
-  filterTo: document.getElementById('filterTo'),
-  collapseByDefault: document.getElementById('collapseByDefault'),
-  restoreDefaultsBtn: document.getElementById('restoreDefaultsBtn'),
-  resetDataBtn: document.getElementById('resetDataBtn'),
-  exportDataBtn: document.getElementById('exportDataBtn'),
-  importDataInput: document.getElementById('importDataInput'),
-  collapseAllBtn: document.getElementById('collapseAllBtn'),
-  expandAllBtn: document.getElementById('expandAllBtn'),
-  backToHomeBtn: document.getElementById('backToHomeBtn'),
-  groupDetailTitle: document.getElementById('groupDetailTitle'),
-  groupDetailMeta: document.getElementById('groupDetailMeta'),
-  groupDetailToday: document.getElementById('groupDetailToday'),
-  groupDetailList: document.getElementById('groupDetailList'),
-};
-
-boot();
-
-function boot() {
-  bindEvents();
-  hydrateManualDefaults();
-  renderAll();
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
-function bindEvents() {
-  els.tabs.forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
-  els.addGroupBtn.addEventListener('click', addGroup);
-  els.openManualBtn.addEventListener('click', () => openManualDialog());
-  els.manualGroup.addEventListener('change', syncManualSubChores);
-  els.manualForm.addEventListener('submit', saveManualEntry);
-  document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => els.manualDialog.close()));
-  els.searchLog.addEventListener('input', renderLogView);
-  els.filterGroup.addEventListener('change', renderLogView);
-  els.filterFrom.addEventListener('input', renderLogView);
-  els.filterTo.addEventListener('input', renderLogView);
-  els.collapseByDefault.addEventListener('change', () => {
-    state.settings.collapseByDefault = els.collapseByDefault.checked;
-    saveState();
-    renderHomeView();
-  });
-  els.collapseAllBtn.addEventListener('click', () => toggleAllGroups(true));
-  els.expandAllBtn.addEventListener('click', () => toggleAllGroups(false));
-  els.restoreDefaultsBtn.addEventListener('click', restoreDefaults);
-  els.backToHomeBtn.addEventListener('click', () => switchView('homeView'));
-  els.resetDataBtn.addEventListener('click', () => {
-    if (!confirm('Wipe all groups, sub-chores, and logs?')) return;
-    localStorage.removeItem(STORAGE_KEY);
-    state = loadState(true);
-    renderAll();
-  });
-  els.exportDataBtn.addEventListener('click', exportBackup);
-  els.importDataInput.addEventListener('change', importBackup);
+function deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
-function loadState(forceBlank = false) {
-  if (forceBlank) return blankState();
+function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    const seeded = buildSeedState();
+    const seeded = deepClone(STARTER_TEMPLATE);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   }
   try {
     const parsed = JSON.parse(raw);
-    return migrateState(parsed);
+    parsed.settings ||= { collapseDefault: false };
+    parsed.groups ||= [];
+    parsed.logs ||= [];
+    parsed.ui ||= { selectedGroupId: null };
+    return parsed;
   } catch {
-    const seeded = buildSeedState();
+    const seeded = deepClone(STARTER_TEMPLATE);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   }
 }
 
-function migrateState(parsed) {
-  const migrated = {
-    version: DATA_VERSION,
-    settings: { collapseByDefault: !!parsed?.settings?.collapseByDefault },
-    groups: Array.isArray(parsed?.groups) ? parsed.groups : [],
-    logs: Array.isArray(parsed?.logs) ? parsed.logs : [],
-  };
-
-  if (!parsed?.version) {
-    migrated.settings.collapseByDefault = parsed?.settings?.collapseByDefault ?? true;
-  }
-
-  migrated.groups = migrated.groups.map((group, groupIndex) => ({
-    id: group.id || crypto.randomUUID(),
-    name: group.name || `Group ${groupIndex + 1}`,
-    archived: !!group.archived,
-    sortOrder: group.sortOrder || groupIndex + 1,
-    subChores: Array.isArray(group.subChores) ? group.subChores.map((sub, subIndex) => ({
-      id: sub.id || crypto.randomUUID(),
-      name: sub.name || `Sub-chore ${subIndex + 1}`,
-      archived: !!sub.archived,
-      sortOrder: sub.sortOrder || subIndex + 1,
-    })) : [],
-  }));
-
-  migrated.logs = migrated.logs.map(log => ({
-    id: log.id || crypto.randomUUID(),
-    groupId: log.groupId,
-    subChoreId: log.subChoreId,
-    actionType: log.actionType === 'minus' ? 'minus' : 'plus',
-    amount: Number(log.amount) || 1,
-    effectiveDate: log.effectiveDate || todayString(),
-    effectiveTime: log.effectiveTime || nowTimeString(),
-    note: log.note || '',
-    isManualEntry: !!log.isManualEntry,
-    loggedAt: log.loggedAt || new Date().toISOString(),
-  }));
-
-  saveRawState(migrated);
-  return migrated;
-}
-
-function blankState() {
-  return { version: DATA_VERSION, settings: { collapseByDefault: true }, groups: [], logs: [] };
-}
-
-function saveRawState(nextState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
-}
-
 function saveState() {
-  saveRawState(state);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function renderAll() {
+function formatDate(dateString) {
+  const dt = new Date(dateString + "T00:00:00");
+  return dt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatDateTime(dateString, timeString) {
+  const dt = new Date(`${dateString}T${timeString}`);
+  return dt.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function todayParts() {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now.toTimeString().slice(0, 5);
+  return { date, time };
+}
+
+function switchTab(tabName) {
+  document.querySelectorAll(".tab").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabName));
+  document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active", panel.id === `${tabName}Tab`));
+}
+
+function getGroupById(groupId) {
+  return state.groups.find(g => g.id === groupId);
+}
+
+function getChoreByIds(groupId, choreId) {
+  const group = getGroupById(groupId);
+  if (!group) return null;
+  return group.chores.find(ch => ch.id === choreId) || null;
+}
+
+function getLastLog(groupId, choreId) {
+  const filtered = state.logs.filter(log => log.groupId === groupId && log.choreId === choreId);
+  return filtered.sort((a,b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
+function addLog({ groupId, choreId, action = "plus", date, time, note = "", manual = false }) {
+  const group = getGroupById(groupId);
+  const chore = getChoreByIds(groupId, choreId);
+  if (!group || !chore) return;
+  state.logs.unshift({
+    id: uid(),
+    groupId,
+    choreId,
+    groupName: group.name,
+    choreName: chore.name,
+    action,
+    date,
+    time,
+    note: note.trim(),
+    manual,
+    createdAt: new Date().toISOString()
+  });
   saveState();
-  renderHomeView();
-  renderManageView();
-  renderLogFilters();
-  renderLogView();
-  renderStats();
-  renderGroupDetailView();
-  els.collapseByDefault.checked = !!state.settings.collapseByDefault;
+  renderAll();
 }
 
-function switchView(id) {
-  els.tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.view === id));
-  els.views.forEach(view => view.classList.toggle('active', view.id === id));
-}
+function getStats() {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
 
-function renderHomeView() {
-  els.groupsContainer.innerHTML = '';
-  const activeGroups = sortedGroups();
-  if (!activeGroups.length) {
-    els.groupsContainer.innerHTML = `<div class="empty">No groups yet. Add one in Manage or restore your starter template in Settings.</div>`;
-    return;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  const weekStartKey = weekStart.toISOString().slice(0, 10);
+
+  const todayCount = state.logs.filter(log => log.date === today).length;
+  const weekCount = state.logs.filter(log => log.date >= weekStartKey).length;
+
+  const uniqueDays = [...new Set(state.logs.map(log => log.date))].sort().reverse();
+  let streak = 0;
+  let cursor = new Date(today + "T00:00:00");
+
+  for (const day of uniqueDays) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (day === key) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else if (day < key) {
+      break;
+    }
   }
-  const tpl = document.getElementById('groupCardTemplate');
-  activeGroups.forEach(group => {
-    const node = tpl.content.firstElementChild.cloneNode(true);
-    node.dataset.groupId = group.id;
-    const activeSubs = sortedSubs(group);
-    const todayDone = countLogsForGroupToday(group.id);
-    node.querySelector('.group-name').textContent = group.name;
-    node.querySelector('.group-meta').textContent = `${activeSubs.length} sub-chores`;
-    node.querySelector('.group-today').textContent = `${todayDone} today`;
-    node.querySelector('.group-link-btn').addEventListener('click', () => openGroupDetail(group.id));
-    els.groupsContainer.appendChild(node);
-  });
+
+  return { todayCount, weekCount, streak };
 }
 
-function renderManageView() {
-  els.manageGroupsContainer.innerHTML = '';
-  const groups = sortedGroups();
-  if (!groups.length) {
-    els.manageGroupsContainer.innerHTML = `<div class="empty">No groups yet. Add one above or restore defaults in Settings.</div>`;
-    return;
-  }
-  const tpl = document.getElementById('manageGroupTemplate');
-  groups.forEach(group => {
-    const node = tpl.content.firstElementChild.cloneNode(true);
-    const groupInput = node.querySelector('.group-name-input');
-    groupInput.value = group.name;
-    groupInput.addEventListener('change', () => {
-      group.name = groupInput.value.trim() || group.name;
-      renderAll();
-    });
-    node.querySelector('.delete-group-btn').addEventListener('click', () => deleteGroup(group.id));
+function renderHome() {
+  const container = document.getElementById("homeGroups");
+  container.innerHTML = "";
 
-    const subWrap = node.querySelector('.manage-sub-list');
-    sortedSubs(group).forEach(sub => {
-      const row = document.createElement('div');
-      row.className = 'manage-sub-row';
-      row.innerHTML = `
-        <input type="text" value="${escapeHtml(sub.name)}" />
-        <div class="sub-actions">
-          <button class="mini-btn up-btn">↑</button>
-          <button class="mini-btn down-btn">↓</button>
-          <button class="danger-btn delete-sub-btn">Delete</button>
+  state.groups.forEach(group => {
+    const card = document.createElement("article");
+    card.className = "group-card";
+    card.innerHTML = `
+      <div class="group-line">
+        <div>
+          <h3>${escapeHtml(group.name)}</h3>
+          <p>${group.chores.length} sub-chore${group.chores.length === 1 ? "" : "s"}</p>
         </div>
-      `;
-      const [input] = row.querySelectorAll('input');
-      input.addEventListener('change', () => {
-        sub.name = input.value.trim() || sub.name;
-        renderAll();
-      });
-      row.querySelector('.delete-sub-btn').addEventListener('click', () => deleteSub(group.id, sub.id));
-      row.querySelector('.up-btn').addEventListener('click', () => moveSub(group.id, sub.id, -1));
-      row.querySelector('.down-btn').addEventListener('click', () => moveSub(group.id, sub.id, 1));
-      subWrap.appendChild(row);
-    });
-
-    const newSubInput = node.querySelector('.new-sub-input');
-    node.querySelector('.add-sub-btn').addEventListener('click', () => addSub(group.id, newSubInput));
-    els.manageGroupsContainer.appendChild(node);
-  });
-}
-
-function renderLogFilters() {
-  const current = els.filterGroup.value;
-  const options = ['<option value="all">All groups</option>'].concat(sortedGroups().map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`));
-  els.filterGroup.innerHTML = options.join('');
-  els.filterGroup.value = options.some(opt => opt.includes(`value="${current}"`)) ? current : 'all';
-}
-
-function renderLogView() {
-  const query = els.searchLog.value.trim().toLowerCase();
-  const groupId = els.filterGroup.value;
-  const from = els.filterFrom.value;
-  const to = els.filterTo.value;
-
-  const filtered = [...state.logs]
-    .sort((a, b) => new Date(b.loggedAt) - new Date(a.loggedAt))
-    .filter(log => {
-      const group = state.groups.find(g => g.id === log.groupId);
-      const sub = group?.subChores.find(s => s.id === log.subChoreId);
-      const hay = [group?.name || '', sub?.name || '', log.note || ''].join(' ').toLowerCase();
-      const effectiveDate = log.effectiveDate;
-      const matchQuery = !query || hay.includes(query);
-      const matchGroup = groupId === 'all' || log.groupId === groupId;
-      const matchFrom = !from || effectiveDate >= from;
-      const matchTo = !to || effectiveDate <= to;
-      return matchQuery && matchGroup && matchFrom && matchTo;
-    });
-
-  els.logContainer.innerHTML = '';
-  if (!filtered.length) {
-    els.logContainer.innerHTML = `<div class="empty">No log entries match the filters.</div>`;
-    return;
-  }
-
-  const grouped = groupBy(filtered, log => log.effectiveDate);
-  Object.keys(grouped).sort((a, b) => b.localeCompare(a)).forEach(date => {
-    const dayBlock = document.createElement('section');
-    dayBlock.className = 'card log-day';
-    dayBlock.innerHTML = `<h3>${formatDateHeading(date)}</h3>`;
-    const stack = document.createElement('div');
-    stack.className = 'stack gap-sm';
-
-    grouped[date].forEach(log => {
-      const group = state.groups.find(g => g.id === log.groupId);
-      const sub = group?.subChores.find(s => s.id === log.subChoreId);
-      const entry = document.createElement('article');
-      entry.className = 'log-entry';
-      entry.innerHTML = `
-        <div class="log-row">
-          <strong>${escapeHtml(group?.name || 'Deleted group')} / ${escapeHtml(sub?.name || 'Deleted sub-chore')}</strong>
-          <span class="log-action-badge ${log.actionType === 'plus' ? 'badge-plus' : 'badge-minus'}">${log.actionType === 'plus' ? '+' : '-'}${log.amount || 1}</span>
-        </div>
-        <div class="log-meta muted small">
-          <span>${formatTime(log.effectiveTime)}</span>
-          ${log.isManualEntry ? '<span>• manual/backdated</span>' : ''}
-          <span>• entered ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(log.loggedAt))}</span>
-        </div>
-        ${log.note ? `<p class="small">${escapeHtml(log.note)}</p>` : ''}
-        <div class="sub-actions">
-          <button class="mini-btn edit-log">Edit</button>
-          <button class="danger-btn delete-log">Delete</button>
-        </div>
-      `;
-      entry.querySelector('.edit-log').addEventListener('click', () => openManualDialog({ logId: log.id }));
-      entry.querySelector('.delete-log').addEventListener('click', () => deleteLog(log.id));
-      stack.appendChild(entry);
-    });
-    dayBlock.appendChild(stack);
-    els.logContainer.appendChild(dayBlock);
-  });
-}
-
-
-function openGroupDetail(groupId) {
-  currentGroupId = groupId;
-  renderGroupDetailView();
-  switchView('groupView');
-}
-
-function renderGroupDetailView() {
-  const group = state.groups.find(g => g.id === currentGroupId) || sortedGroups()[0];
-  if (!group) {
-    els.groupDetailTitle.textContent = 'Group';
-    els.groupDetailMeta.textContent = 'No group selected';
-    els.groupDetailToday.textContent = '0 today';
-    els.groupDetailList.innerHTML = '<div class="empty">No group selected.</div>';
-    return;
-  }
-  currentGroupId = group.id;
-  const activeSubs = sortedSubs(group);
-  els.groupDetailTitle.textContent = group.name;
-  els.groupDetailMeta.textContent = `${activeSubs.length} sub-chores`;
-  els.groupDetailToday.textContent = `${countLogsForGroupToday(group.id)} today`;
-  els.groupDetailList.innerHTML = '';
-  if (!activeSubs.length) {
-    els.groupDetailList.innerHTML = '<div class="empty">No sub-chores in this group yet.</div>';
-    return;
-  }
-  activeSubs.forEach(sub => {
-    const last = getLastLog(group.id, sub.id);
-    const row = document.createElement('div');
-    row.className = 'sub-row';
-    row.innerHTML = `
-      <div class="sub-copy">
-        <strong>${escapeHtml(sub.name)}</strong>
-        <p class="muted small">${last ? `Last: ${formatEffective(last)}` : 'No logs yet'}</p>
-      </div>
-      <div class="sub-actions">
-        <button class="action-btn minus" aria-label="Log minus">−</button>
-        <button class="action-btn plus" aria-label="Log plus">+</button>
-        <button class="mini-btn">Manual</button>
+        <button class="group-open" data-group-open="${group.id}" aria-label="Open ${escapeHtml(group.name)}">›</button>
       </div>
     `;
-    row.querySelector('.plus').addEventListener('click', () => quickLog(group.id, sub.id, 'plus'));
-    row.querySelector('.minus').addEventListener('click', () => quickLog(group.id, sub.id, 'minus'));
-    row.querySelector('.mini-btn').addEventListener('click', () => openManualDialog({ groupId: group.id, subChoreId: sub.id }));
-    els.groupDetailList.appendChild(row);
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll("[data-group-open]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.ui.selectedGroupId = btn.dataset.groupOpen;
+      saveState();
+      renderGroupView();
+      switchTab("group");
+    });
+  });
+}
+
+function renderGroupView() {
+  const group = getGroupById(state.ui.selectedGroupId);
+  const title = document.getElementById("groupTitle");
+  const subtitle = document.getElementById("groupSubtitle");
+  const container = document.getElementById("groupChores");
+  container.innerHTML = "";
+
+  if (!group) {
+    title.textContent = "Select a group";
+    subtitle.textContent = "Tap a group from Home.";
+    return;
+  }
+
+  title.textContent = group.name;
+  subtitle.textContent = `${group.chores.length} sub-chore${group.chores.length === 1 ? "" : "s"}`;
+
+  group.chores.forEach(chore => {
+    const last = getLastLog(group.id, chore.id);
+    const card = document.createElement("article");
+    card.className = "chore-card";
+    card.innerHTML = `
+      <div class="chore-head">
+        <div>
+          <h3>${escapeHtml(chore.name)}</h3>
+          <p>${last ? `${last.action === "plus" ? "+" : "-"} logged ${formatDateTime(last.date, last.time)}` : "No logs yet"}</p>
+        </div>
+      </div>
+      <div class="chore-actions">
+        <button class="action-btn minus" data-log-action="minus" data-group-id="${group.id}" data-chore-id="${chore.id}">−</button>
+        <button class="action-btn plus" data-log-action="plus" data-group-id="${group.id}" data-chore-id="${chore.id}">+</button>
+        <button class="manual-mini" data-manual-group="${group.id}" data-manual-chore="${chore.id}">Manual</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll("[data-log-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const parts = todayParts();
+      addLog({
+        groupId: btn.dataset.groupId,
+        choreId: btn.dataset.choreId,
+        action: btn.dataset.logAction,
+        date: parts.date,
+        time: parts.time,
+        manual: false
+      });
+    });
+  });
+
+  container.querySelectorAll("[data-manual-group]").forEach(btn => {
+    btn.addEventListener("click", () => openManualDialog(btn.dataset.manualGroup, btn.dataset.manualChore));
   });
 }
 
 function renderStats() {
-  const today = todayString();
-  const weekAgo = offsetDateString(-6);
-  const plusLogs = state.logs.filter(log => log.actionType === 'plus');
-  els.todayCount.textContent = plusLogs.filter(log => log.effectiveDate === today).length;
-  els.weekCount.textContent = plusLogs.filter(log => log.effectiveDate >= weekAgo && log.effectiveDate <= today).length;
-  els.streakCount.textContent = computeDailyStreak();
+  const { todayCount, weekCount, streak } = getStats();
+  document.getElementById("todayCount").textContent = todayCount;
+  document.getElementById("weekCount").textContent = weekCount;
+  document.getElementById("streakCount").textContent = streak;
 }
 
-function addGroup() {
-  const name = els.newGroupName.value.trim();
-  if (!name) return;
-  state.groups.push({ id: crypto.randomUUID(), name, archived: false, sortOrder: state.groups.length + 1, subChores: [] });
-  els.newGroupName.value = '';
-  renderAll();
+function renderLogFilters() {
+  const select = document.getElementById("logGroupFilter");
+  const current = select.value;
+  select.innerHTML = `<option value="">All groups</option>`;
+  state.groups.forEach(group => {
+    const option = document.createElement("option");
+    option.value = group.id;
+    option.textContent = group.name;
+    select.appendChild(option);
+  });
+  select.value = current;
 }
 
-function deleteGroup(groupId) {
-  if (!confirm('Delete this group and its sub-chores? Logs will stay but show as deleted items.')) return;
-  state.groups = state.groups.filter(g => g.id !== groupId);
-  renderAll();
-}
+function renderLogs() {
+  const list = document.getElementById("logList");
+  list.innerHTML = "";
+  const search = document.getElementById("logSearch").value.trim().toLowerCase();
+  const groupFilter = document.getElementById("logGroupFilter").value;
 
-function addSub(groupId, input) {
-  const name = input.value.trim();
-  if (!name) return;
-  const group = state.groups.find(g => g.id === groupId);
-  if (!group) return;
-  group.subChores.push({ id: crypto.randomUUID(), name, archived: false, sortOrder: group.subChores.length + 1 });
-  input.value = '';
-  renderAll();
-}
+  const logs = state.logs.filter(log => {
+    const matchesSearch = !search || [log.groupName, log.choreName, log.note].join(" ").toLowerCase().includes(search);
+    const matchesGroup = !groupFilter || log.groupId === groupFilter;
+    return matchesSearch && matchesGroup;
+  });
 
-function deleteSub(groupId, subId) {
-  if (!confirm('Delete this sub-chore? Existing logs will remain.')) return;
-  const group = state.groups.find(g => g.id === groupId);
-  if (!group) return;
-  group.subChores = group.subChores.filter(s => s.id !== subId);
-  renderAll();
-}
+  if (!logs.length) {
+    const empty = document.createElement("div");
+    empty.className = "card";
+    empty.innerHTML = `<p>No log entries yet.</p>`;
+    list.appendChild(empty);
+    return;
+  }
 
-function moveSub(groupId, subId, delta) {
-  const group = state.groups.find(g => g.id === groupId);
-  if (!group) return;
-  const subs = sortedSubs(group);
-  const idx = subs.findIndex(s => s.id === subId);
-  const target = idx + delta;
-  if (idx < 0 || target < 0 || target >= subs.length) return;
-  [subs[idx].sortOrder, subs[target].sortOrder] = [subs[target].sortOrder, subs[idx].sortOrder];
-  group.subChores = subs;
-  renderAll();
-}
+  const grouped = {};
+  logs.forEach(log => {
+    if (!grouped[log.date]) grouped[log.date] = [];
+    grouped[log.date].push(log);
+  });
 
-function quickLog(groupId, subChoreId, actionType) {
-  addLog({ groupId, subChoreId, actionType, amount: 1, effectiveDate: todayString(), effectiveTime: nowTimeString(), note: '', isManualEntry: false });
-  renderAll();
-  if (currentGroupId === groupId) renderGroupDetailView();
-}
+  Object.keys(grouped).sort((a,b) => b.localeCompare(a)).forEach(date => {
+    const dayWrap = document.createElement("section");
+    dayWrap.className = "day-group";
+    dayWrap.innerHTML = `<h3 class="day-heading">${formatDate(date)}</h3>`;
+    grouped[date].forEach(log => {
+      const card = document.createElement("article");
+      card.className = "log-card";
+      card.innerHTML = `
+        <div class="log-top">
+          <div>
+            <h4>${escapeHtml(log.choreName)}</h4>
+            <p>${escapeHtml(log.groupName)}</p>
+          </div>
+          <div class="pill">${log.action === "plus" ? "+" : "-"} • ${formatDateTime(log.date, log.time)}</div>
+        </div>
+        ${log.note ? `<p>${escapeHtml(log.note)}</p>` : ""}
+        <div class="log-actions">
+          <button class="btn" data-edit-log="${log.id}">Edit</button>
+          <button class="btn danger" data-delete-log="${log.id}">Delete</button>
+        </div>
+      `;
+      dayWrap.appendChild(card);
+    });
+    list.appendChild(dayWrap);
+  });
 
-function addLog({ groupId, subChoreId, actionType, amount, effectiveDate, effectiveTime, note, isManualEntry }) {
-  state.logs.push({
-    id: crypto.randomUUID(),
-    groupId,
-    subChoreId,
-    actionType,
-    amount: Number(amount) || 1,
-    effectiveDate,
-    effectiveTime,
-    note: note || '',
-    isManualEntry: !!isManualEntry,
-    loggedAt: new Date().toISOString(),
+  list.querySelectorAll("[data-delete-log]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.deleteLog;
+      if (!confirm("Delete this log entry?")) return;
+      state.logs = state.logs.filter(log => log.id !== id);
+      saveState();
+      renderAll();
+    });
+  });
+
+  list.querySelectorAll("[data-edit-log]").forEach(btn => {
+    btn.addEventListener("click", () => openEditDialog(btn.dataset.editLog));
   });
 }
 
-function deleteLog(logId) {
-  if (!confirm('Delete this log entry?')) return;
-  state.logs = state.logs.filter(log => log.id !== logId);
-  renderAll();
+function renderManage() {
+  const container = document.getElementById("manageGroups");
+  container.innerHTML = "";
+
+  state.groups.forEach(group => {
+    const card = document.createElement("article");
+    card.className = "manage-group-card";
+    card.innerHTML = `
+      <div class="manage-row">
+        <strong>${escapeHtml(group.name)}</strong>
+        <div class="manage-actions">
+          <button class="btn" data-rename-group="${group.id}">Rename</button>
+          <button class="btn danger" data-delete-group="${group.id}">Delete</button>
+        </div>
+      </div>
+
+      <form class="inline-form" data-add-chore-form="${group.id}">
+        <input type="text" name="choreName" maxlength="60" placeholder="New sub-chore for ${escapeHtml(group.name)}" />
+        <button class="btn btn-primary" type="submit">Add Sub-chore</button>
+      </form>
+
+      <div class="sub-list">
+        ${group.chores.map(ch => `
+          <div class="sub-item">
+            <span>${escapeHtml(ch.name)}</span>
+            <div class="sub-actions">
+              <button class="btn" data-rename-chore="${group.id}|${ch.id}">Rename</button>
+              <button class="btn danger" data-delete-chore="${group.id}|${ch.id}">Delete</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll("[data-add-chore-form]").forEach(form => {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const groupId = form.dataset.addChoreForm;
+      const input = form.querySelector('input[name="choreName"]');
+      const value = input.value.trim();
+      if (!value) return;
+      const group = getGroupById(groupId);
+      group.chores.push({ id: uid(), name: value });
+      input.value = "";
+      saveState();
+      renderAll();
+    });
+  });
+
+  container.querySelectorAll("[data-rename-group]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const group = getGroupById(btn.dataset.renameGroup);
+      const next = prompt("Rename group", group.name);
+      if (!next || !next.trim()) return;
+      group.name = next.trim();
+      state.logs.forEach(log => { if (log.groupId === group.id) log.groupName = group.name; });
+      saveState();
+      renderAll();
+    });
+  });
+
+  container.querySelectorAll("[data-delete-group]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const groupId = btn.dataset.deleteGroup;
+      const group = getGroupById(groupId);
+      if (!confirm(`Delete group "${group.name}" and its logs?`)) return;
+      state.groups = state.groups.filter(g => g.id !== groupId);
+      state.logs = state.logs.filter(log => log.groupId !== groupId);
+      if (state.ui.selectedGroupId === groupId) state.ui.selectedGroupId = null;
+      saveState();
+      renderAll();
+    });
+  });
+
+  container.querySelectorAll("[data-rename-chore]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const [groupId, choreId] = btn.dataset.renameChore.split("|");
+      const chore = getChoreByIds(groupId, choreId);
+      const next = prompt("Rename sub-chore", chore.name);
+      if (!next || !next.trim()) return;
+      chore.name = next.trim();
+      state.logs.forEach(log => { if (log.choreId === chore.id) log.choreName = chore.name; });
+      saveState();
+      renderAll();
+    });
+  });
+
+  container.querySelectorAll("[data-delete-chore]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const [groupId, choreId] = btn.dataset.deleteChore.split("|");
+      const group = getGroupById(groupId);
+      const chore = getChoreByIds(groupId, choreId);
+      if (!confirm(`Delete sub-chore "${chore.name}" and its logs?`)) return;
+      group.chores = group.chores.filter(ch => ch.id !== choreId);
+      state.logs = state.logs.filter(log => log.choreId !== choreId);
+      saveState();
+      renderAll();
+    });
+  });
 }
 
-function openManualDialog(options = {}) {
-  hydrateManualDefaults();
-  populateManualGroups();
-  els.manualTitle.textContent = options.logId ? 'Edit Entry' : 'Manual Entry';
-  els.editingLogId.value = options.logId || '';
+function populateManualOptions(groupId, choreId) {
+  const groupSelect = document.getElementById("manualGroup");
+  const choreSelect = document.getElementById("manualChore");
+  groupSelect.innerHTML = "";
+  state.groups.forEach(group => {
+    const option = document.createElement("option");
+    option.value = group.id;
+    option.textContent = group.name;
+    groupSelect.appendChild(option);
+  });
 
-  if (options.logId) {
-    const log = state.logs.find(item => item.id === options.logId);
-    if (log) {
-      els.manualGroup.value = log.groupId;
-      syncManualSubChores(log.subChoreId);
-      els.manualAction.value = log.actionType;
-      els.manualAmount.value = log.amount || 1;
-      els.manualDate.value = log.effectiveDate;
-      els.manualTime.value = log.effectiveTime;
-      els.manualNote.value = log.note || '';
-    }
-  } else {
-    if (options.groupId) els.manualGroup.value = options.groupId;
-    syncManualSubChores(options.subChoreId);
-  }
-  els.manualDialog.showModal();
+  const selectedGroupId = groupId || state.ui.selectedGroupId || state.groups[0]?.id;
+  groupSelect.value = selectedGroupId;
+  populateManualChoreOptions(selectedGroupId, choreId);
+
+  groupSelect.onchange = () => populateManualChoreOptions(groupSelect.value);
 }
 
-function hydrateManualDefaults() {
-  els.manualDate.value = todayString();
-  els.manualTime.value = nowTimeString();
-  els.manualAction.value = 'plus';
-  els.manualAmount.value = 1;
-  els.manualNote.value = '';
-  els.editingLogId.value = '';
+function populateManualChoreOptions(groupId, selectedChoreId = null) {
+  const choreSelect = document.getElementById("manualChore");
+  const group = getGroupById(groupId);
+  choreSelect.innerHTML = "";
+  (group?.chores || []).forEach(chore => {
+    const option = document.createElement("option");
+    option.value = chore.id;
+    option.textContent = chore.name;
+    choreSelect.appendChild(option);
+  });
+  if (selectedChoreId) choreSelect.value = selectedChoreId;
 }
 
-function populateManualGroups() {
-  const groups = sortedGroups();
-  els.manualGroup.innerHTML = groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
-  syncManualSubChores();
+function openManualDialog(groupId = null, choreId = null) {
+  const dialog = document.getElementById("manualDialog");
+  const parts = todayParts();
+  populateManualOptions(groupId, choreId);
+  document.getElementById("manualDate").value = parts.date;
+  document.getElementById("manualTime").value = parts.time;
+  document.getElementById("manualAction").value = "plus";
+  document.getElementById("manualNote").value = "";
+  dialog.showModal();
 }
 
-function syncManualSubChores(selectedId) {
-  const group = state.groups.find(g => g.id === els.manualGroup.value) || sortedGroups()[0];
-  const subs = sortedSubs(group || { subChores: [] });
-  els.manualSubChore.innerHTML = subs.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-  if (selectedId) els.manualSubChore.value = selectedId;
+function closeManualDialog() {
+  document.getElementById("manualDialog").close();
 }
 
-function saveManualEntry(event) {
-  event.preventDefault();
-  const payload = {
-    groupId: els.manualGroup.value,
-    subChoreId: els.manualSubChore.value,
-    actionType: els.manualAction.value,
-    amount: Number(els.manualAmount.value) || 1,
-    effectiveDate: els.manualDate.value,
-    effectiveTime: els.manualTime.value,
-    note: els.manualNote.value.trim(),
-    isManualEntry: true,
-  };
-  if (!payload.groupId || !payload.subChoreId || !payload.effectiveDate || !payload.effectiveTime) return;
-
-  const existingId = els.editingLogId.value;
-  if (existingId) {
-    const log = state.logs.find(item => item.id === existingId);
-    if (log) Object.assign(log, payload);
-  } else {
-    addLog(payload);
-  }
-  els.manualDialog.close();
-  renderAll();
+function openEditDialog(logId) {
+  const log = state.logs.find(item => item.id === logId);
+  if (!log) return;
+  document.getElementById("editLogId").value = log.id;
+  document.getElementById("editAction").value = log.action;
+  document.getElementById("editDate").value = log.date;
+  document.getElementById("editTime").value = log.time;
+  document.getElementById("editNote").value = log.note || "";
+  document.getElementById("editLogDialog").showModal();
 }
 
-function restoreDefaults() {
-  if (state.groups.length || state.logs.length) {
-    const shouldReplace = confirm('Replace current data with your starter template? Export a backup first if you want to keep the current setup.');
-    if (!shouldReplace) return;
-  }
-  state = buildSeedState();
-  renderAll();
+function closeEditDialog() {
+  document.getElementById("editLogDialog").close();
 }
 
 function exportBackup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
+  const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `chore-logger-backup-${todayString()}.json`;
+  anchor.download = `chore-backup-${new Date().toISOString().slice(0,10)}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
 
-async function importBackup(event) {
-  const [file] = event.target.files || [];
+function importBackup(file) {
   if (!file) return;
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    state = migrateState(parsed);
-    renderAll();
-    alert('Backup imported.');
-  } catch {
-    alert('That backup file could not be imported.');
-  } finally {
-    event.target.value = '';
-  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!Array.isArray(parsed.groups) || !Array.isArray(parsed.logs)) {
+        throw new Error("Invalid backup shape");
+      }
+      state = parsed;
+      state.settings ||= { collapseDefault: false };
+      state.ui ||= { selectedGroupId: null };
+      saveState();
+      renderAll();
+      alert("Backup imported.");
+    } catch {
+      alert("That backup file is invalid.");
+    }
+  };
+  reader.readAsText(file);
 }
 
-function toggleAllGroups(collapse = true) {
-  if (collapse) {
-    switchView('homeView');
-  } else {
-    const first = sortedGroups()[0];
-    if (first) openGroupDetail(first.id);
-  }
+function restoreStarterTemplate() {
+  if (!confirm("Replace current data with the starter template? Export first if you need a backup.")) return;
+  state = deepClone(STARTER_TEMPLATE);
+  saveState();
+  renderAll();
 }
 
-function countLogsForGroupToday(groupId) {
-  const today = todayString();
-  return state.logs.filter(log => log.groupId === groupId && log.actionType === 'plus' && log.effectiveDate === today).length;
+function wipeAllData() {
+  if (!confirm("Wipe everything? This cannot be undone unless you exported a backup.")) return;
+  state = deepClone(STARTER_TEMPLATE);
+  state.groups = [];
+  state.logs = [];
+  state.ui.selectedGroupId = null;
+  saveState();
+  renderAll();
 }
 
-function sortedGroups() {
-  return [...state.groups].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function sortedSubs(group) {
-  return [...(group?.subChores || [])].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+function renderAll() {
+  renderStats();
+  renderHome();
+  renderGroupView();
+  renderLogFilters();
+  renderLogs();
+  renderManage();
+  document.getElementById("collapseDefaultToggle").checked = !!state.settings.collapseDefault;
 }
 
-function getLastLog(groupId, subChoreId) {
-  return [...state.logs]
-    .filter(log => log.groupId === groupId && log.subChoreId === subChoreId)
-    .sort((a, b) => `${b.effectiveDate}T${b.effectiveTime}`.localeCompare(`${a.effectiveDate}T${a.effectiveTime}`))[0];
-}
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
 
-function computeDailyStreak() {
-  const plusDays = [...new Set(state.logs.filter(log => log.actionType === 'plus').map(log => log.effectiveDate))].sort().reverse();
-  if (!plusDays.length) return 0;
-  let streak = 0;
-  let cursor = todayString();
-  while (plusDays.includes(cursor)) {
-    streak += 1;
-    cursor = offsetDateString(-streak);
-  }
-  return streak;
-}
+document.getElementById("manualEntryBtnTop").addEventListener("click", () => openManualDialog());
+document.getElementById("collapseAllBtn").addEventListener("click", () => {
+  switchTab("home");
+  document.querySelectorAll("[data-group-open]").forEach(() => {});
+  alert("Home is already compact in v4. Tap a group to open it.");
+});
+document.getElementById("expandAllBtn").addEventListener("click", () => {
+  switchTab("home");
+  alert("v4 uses a cleaner group page instead of giant expanded lists.");
+});
+document.getElementById("backToHomeBtn").addEventListener("click", () => switchTab("home"));
 
-function formatEffective(log) {
-  return `${formatDateHeading(log.effectiveDate)} at ${formatTime(log.effectiveTime)}`;
-}
+document.getElementById("groupForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("newGroupName");
+  const value = input.value.trim();
+  if (!value) return;
+  state.groups.push({ id: uid(), name: value, chores: [] });
+  input.value = "";
+  saveState();
+  renderAll();
+});
 
-function formatDateHeading(dateString) {
-  const d = new Date(`${dateString}T12:00:00`);
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-}
+document.getElementById("manualForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  addLog({
+    groupId: document.getElementById("manualGroup").value,
+    choreId: document.getElementById("manualChore").value,
+    action: document.getElementById("manualAction").value,
+    date: document.getElementById("manualDate").value,
+    time: document.getElementById("manualTime").value,
+    note: document.getElementById("manualNote").value,
+    manual: true
+  });
+  closeManualDialog();
+});
 
-function formatTime(timeString) {
-  const [hours, minutes] = timeString.split(':').map(Number);
-  const d = new Date();
-  d.setHours(hours, minutes, 0, 0);
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
-}
+document.getElementById("editLogForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const id = document.getElementById("editLogId").value;
+  const log = state.logs.find(item => item.id === id);
+  if (!log) return;
+  log.action = document.getElementById("editAction").value;
+  log.date = document.getElementById("editDate").value;
+  log.time = document.getElementById("editTime").value;
+  log.note = document.getElementById("editNote").value.trim();
+  saveState();
+  renderAll();
+  closeEditDialog();
+});
 
-function todayString() {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+document.getElementById("closeManualDialog").addEventListener("click", closeManualDialog);
+document.getElementById("cancelManualDialog").addEventListener("click", closeManualDialog);
+document.getElementById("closeEditDialog").addEventListener("click", closeEditDialog);
+document.getElementById("cancelEditDialog").addEventListener("click", closeEditDialog);
 
-function nowTimeString() {
-  const now = new Date();
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
+document.getElementById("logSearch").addEventListener("input", renderLogs);
+document.getElementById("logGroupFilter").addEventListener("change", renderLogs);
 
-function offsetDateString(offsetDays) {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+document.getElementById("restoreTemplateBtn").addEventListener("click", restoreStarterTemplate);
+document.getElementById("exportBtn").addEventListener("click", exportBackup);
+document.getElementById("importInput").addEventListener("change", (e) => importBackup(e.target.files[0]));
+document.getElementById("wipeDataBtn").addEventListener("click", wipeAllData);
+document.getElementById("collapseDefaultToggle").addEventListener("change", (e) => {
+  state.settings.collapseDefault = e.target.checked;
+  saveState();
+});
 
-function pad(num) {
-  return String(num).padStart(2, '0');
-}
-
-function groupBy(arr, keyFn) {
-  return arr.reduce((acc, item) => {
-    const key = keyFn(item);
-    (acc[key] ||= []).push(item);
-    return acc;
-  }, {});
-}
-
-function escapeHtml(str = '') {
-  return String(str)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+renderAll();

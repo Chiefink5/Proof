@@ -1,21 +1,37 @@
 const STORAGE_KEY = 'choreLoggerV1';
+const DATA_VERSION = 2;
 
-const seedState = {
-  settings: { collapseByDefault: false },
+const DEFAULT_TEMPLATE = {
+  settings: { collapseByDefault: true },
   groups: [
-    { id: crypto.randomUUID(), name: 'Kitchen', archived: false, sortOrder: 1, subChores: [
-      { id: crypto.randomUUID(), name: 'Dishes', archived: false, sortOrder: 1 },
-      { id: crypto.randomUUID(), name: 'Trash', archived: false, sortOrder: 2 },
-      { id: crypto.randomUUID(), name: 'Counters', archived: false, sortOrder: 3 },
-    ]},
-    { id: crypto.randomUUID(), name: 'Bathroom', archived: false, sortOrder: 2, subChores: [
-      { id: crypto.randomUUID(), name: 'Toilet', archived: false, sortOrder: 1 },
-      { id: crypto.randomUUID(), name: 'Sink', archived: false, sortOrder: 2 },
-      { id: crypto.randomUUID(), name: 'Mirror', archived: false, sortOrder: 3 },
-    ]},
+    { name: 'Kitchen', chores: ['Load Dishwasher', 'Take out Trash', 'Wipe Counters', 'Wipe Tables', 'Clean Stove', 'Sweep', 'Mop'] },
+    { name: 'Bentleys Bathroom', chores: ['Clean Toilet', 'Clean Sink', 'Clean Mirror', 'Pick up Clothes', 'Pick up Toys', 'Take out Trash'] },
+    { name: 'Master Bedroom', chores: ['Make the Bed', 'Pick up Trash', 'Gather Dog Toys', 'Gather Dishes', 'Vacuum'] },
+    { name: 'Master Bath', chores: ['Pick up Clothes', 'Clean Sink', 'Clean Shower', 'Organize Counter', 'Sweep', 'Clean Toilet', 'Clean Mirror', 'Take out Trash'] },
+    { name: 'Dogs', chores: ['(AM) Lets Dogs Out', '(AM) Feed Dogs', '(AM) Let Broadie Out', '(AM) Feed Broadie', '(PM) Let Dogs Out', '(PM) Feed Dogs', '(PM) Let Broadie Out', '(PM) Feed Broadie'] },
+    { name: 'Car', chores: ['Clean Out Interior'] },
   ],
-  logs: [],
 };
+
+function buildSeedState() {
+  return {
+    version: DATA_VERSION,
+    settings: { collapseByDefault: !!DEFAULT_TEMPLATE.settings.collapseByDefault },
+    groups: DEFAULT_TEMPLATE.groups.map((group, groupIndex) => ({
+      id: crypto.randomUUID(),
+      name: group.name,
+      archived: false,
+      sortOrder: groupIndex + 1,
+      subChores: group.chores.map((name, subIndex) => ({
+        id: crypto.randomUUID(),
+        name,
+        archived: false,
+        sortOrder: subIndex + 1,
+      })),
+    })),
+    logs: [],
+  };
+}
 
 let state = loadState();
 
@@ -47,8 +63,12 @@ const els = {
   filterFrom: document.getElementById('filterFrom'),
   filterTo: document.getElementById('filterTo'),
   collapseByDefault: document.getElementById('collapseByDefault'),
-  seedDataBtn: document.getElementById('seedDataBtn'),
+  restoreDefaultsBtn: document.getElementById('restoreDefaultsBtn'),
   resetDataBtn: document.getElementById('resetDataBtn'),
+  exportDataBtn: document.getElementById('exportDataBtn'),
+  importDataInput: document.getElementById('importDataInput'),
+  collapseAllBtn: document.getElementById('collapseAllBtn'),
+  expandAllBtn: document.getElementById('expandAllBtn'),
 };
 
 boot();
@@ -75,41 +95,92 @@ function bindEvents() {
   els.filterTo.addEventListener('input', renderLogView);
   els.collapseByDefault.addEventListener('change', () => {
     state.settings.collapseByDefault = els.collapseByDefault.checked;
-    saveState(); renderHomeView();
+    saveState();
+    renderHomeView();
   });
-  els.seedDataBtn.addEventListener('click', () => {
-    if (!confirm('Load demo data into the app?')) return;
-    state = structuredClone(seedState);
-    const firstGroup = state.groups[0];
-    const firstSub = firstGroup.subChores[0];
-    addLog({ groupId: firstGroup.id, subChoreId: firstSub.id, actionType: 'plus', amount: 1, effectiveDate: todayString(), effectiveTime: nowTimeString(), note: 'Demo log entry', isManualEntry: false });
-    saveState(); renderAll();
-  });
+  els.collapseAllBtn.addEventListener('click', () => toggleAllGroups(true));
+  els.expandAllBtn.addEventListener('click', () => toggleAllGroups(false));
+  els.restoreDefaultsBtn.addEventListener('click', restoreDefaults);
   els.resetDataBtn.addEventListener('click', () => {
     if (!confirm('Wipe all groups, sub-chores, and logs?')) return;
     localStorage.removeItem(STORAGE_KEY);
     state = loadState(true);
     renderAll();
   });
+  els.exportDataBtn.addEventListener('click', exportBackup);
+  els.importDataInput.addEventListener('change', importBackup);
 }
 
 function loadState(forceBlank = false) {
-  if (forceBlank) return { settings: { collapseByDefault: false }, groups: [], logs: [] };
+  if (forceBlank) return blankState();
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(seedState);
+  if (!raw) {
+    const seeded = buildSeedState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+    return seeded;
+  }
   try {
     const parsed = JSON.parse(raw);
-    parsed.settings ||= { collapseByDefault: false };
-    parsed.groups ||= [];
-    parsed.logs ||= [];
-    return parsed;
+    return migrateState(parsed);
   } catch {
-    return structuredClone(seedState);
+    const seeded = buildSeedState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+    return seeded;
   }
 }
 
+function migrateState(parsed) {
+  const migrated = {
+    version: DATA_VERSION,
+    settings: { collapseByDefault: !!parsed?.settings?.collapseByDefault },
+    groups: Array.isArray(parsed?.groups) ? parsed.groups : [],
+    logs: Array.isArray(parsed?.logs) ? parsed.logs : [],
+  };
+
+  if (!parsed?.version) {
+    migrated.settings.collapseByDefault = parsed?.settings?.collapseByDefault ?? true;
+  }
+
+  migrated.groups = migrated.groups.map((group, groupIndex) => ({
+    id: group.id || crypto.randomUUID(),
+    name: group.name || `Group ${groupIndex + 1}`,
+    archived: !!group.archived,
+    sortOrder: group.sortOrder || groupIndex + 1,
+    subChores: Array.isArray(group.subChores) ? group.subChores.map((sub, subIndex) => ({
+      id: sub.id || crypto.randomUUID(),
+      name: sub.name || `Sub-chore ${subIndex + 1}`,
+      archived: !!sub.archived,
+      sortOrder: sub.sortOrder || subIndex + 1,
+    })) : [],
+  }));
+
+  migrated.logs = migrated.logs.map(log => ({
+    id: log.id || crypto.randomUUID(),
+    groupId: log.groupId,
+    subChoreId: log.subChoreId,
+    actionType: log.actionType === 'minus' ? 'minus' : 'plus',
+    amount: Number(log.amount) || 1,
+    effectiveDate: log.effectiveDate || todayString(),
+    effectiveTime: log.effectiveTime || nowTimeString(),
+    note: log.note || '',
+    isManualEntry: !!log.isManualEntry,
+    loggedAt: log.loggedAt || new Date().toISOString(),
+  }));
+
+  saveRawState(migrated);
+  return migrated;
+}
+
+function blankState() {
+  return { version: DATA_VERSION, settings: { collapseByDefault: true }, groups: [], logs: [] };
+}
+
+function saveRawState(nextState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+}
+
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  saveRawState(state);
 }
 
 function renderAll() {
@@ -131,7 +202,7 @@ function renderHomeView() {
   els.groupsContainer.innerHTML = '';
   const activeGroups = sortedGroups();
   if (!activeGroups.length) {
-    els.groupsContainer.innerHTML = `<div class="empty">No groups yet. Add one in Manage.</div>`;
+    els.groupsContainer.innerHTML = `<div class="empty">No groups yet. Add one in Manage or restore your starter template in Settings.</div>`;
     return;
   }
   const tpl = document.getElementById('groupCardTemplate');
@@ -139,13 +210,15 @@ function renderHomeView() {
     const node = tpl.content.firstElementChild.cloneNode(true);
     node.dataset.groupId = group.id;
     if (state.settings.collapseByDefault) node.classList.add('collapsed');
+    const activeSubs = sortedSubs(group);
+    const todayDone = countLogsForGroupToday(group.id);
     node.querySelector('.group-name').textContent = group.name;
-    node.querySelector('.group-meta').textContent = `${group.subChores.filter(s => !s.archived).length} sub-chores`;
+    node.querySelector('.group-meta').textContent = `${activeSubs.length} sub-chores`;
+    node.querySelector('.group-today').textContent = `${todayDone} today`;
     const toggleBtn = node.querySelector('.toggle-group');
     toggleBtn.addEventListener('click', () => node.classList.toggle('collapsed'));
 
     const subList = node.querySelector('.sub-list');
-    const activeSubs = sortedSubs(group);
     if (!activeSubs.length) {
       subList.innerHTML = `<div class="empty">No sub-chores in this group yet.</div>`;
     } else {
@@ -154,7 +227,7 @@ function renderHomeView() {
         const row = document.createElement('div');
         row.className = 'sub-row';
         row.innerHTML = `
-          <div>
+          <div class="sub-copy">
             <strong>${escapeHtml(sub.name)}</strong>
             <p class="muted small">${last ? `Last: ${formatEffective(last)}` : 'No logs yet'}</p>
           </div>
@@ -178,7 +251,7 @@ function renderManageView() {
   els.manageGroupsContainer.innerHTML = '';
   const groups = sortedGroups();
   if (!groups.length) {
-    els.manageGroupsContainer.innerHTML = `<div class="empty">No groups yet. Add one above.</div>`;
+    els.manageGroupsContainer.innerHTML = `<div class="empty">No groups yet. Add one above or restore defaults in Settings.</div>`;
     return;
   }
   const tpl = document.getElementById('manageGroupTemplate');
@@ -195,7 +268,7 @@ function renderManageView() {
     const subWrap = node.querySelector('.manage-sub-list');
     sortedSubs(group).forEach(sub => {
       const row = document.createElement('div');
-      row.className = 'toolbar';
+      row.className = 'manage-sub-row';
       row.innerHTML = `
         <input type="text" value="${escapeHtml(sub.name)}" />
         <div class="sub-actions">
@@ -222,8 +295,10 @@ function renderManageView() {
 }
 
 function renderLogFilters() {
+  const current = els.filterGroup.value;
   const options = ['<option value="all">All groups</option>'].concat(sortedGroups().map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`));
   els.filterGroup.innerHTML = options.join('');
+  els.filterGroup.value = options.some(opt => opt.includes(`value="${current}"`)) ? current : 'all';
 }
 
 function renderLogView() {
@@ -432,14 +507,56 @@ function saveManualEntry(event) {
   const existingId = els.editingLogId.value;
   if (existingId) {
     const log = state.logs.find(item => item.id === existingId);
-    if (log) {
-      Object.assign(log, payload);
-    }
+    if (log) Object.assign(log, payload);
   } else {
     addLog(payload);
   }
   els.manualDialog.close();
   renderAll();
+}
+
+function restoreDefaults() {
+  if (state.groups.length || state.logs.length) {
+    const shouldReplace = confirm('Replace current data with your starter template? Export a backup first if you want to keep the current setup.');
+    if (!shouldReplace) return;
+  }
+  state = buildSeedState();
+  renderAll();
+}
+
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `chore-logger-backup-${todayString()}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importBackup(event) {
+  const [file] = event.target.files || [];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    state = migrateState(parsed);
+    renderAll();
+    alert('Backup imported.');
+  } catch {
+    alert('That backup file could not be imported.');
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function toggleAllGroups(collapse = true) {
+  document.querySelectorAll('.group-card').forEach(card => card.classList.toggle('collapsed', collapse));
+}
+
+function countLogsForGroupToday(groupId) {
+  const today = todayString();
+  return state.logs.filter(log => log.groupId === groupId && log.actionType === 'plus' && log.effectiveDate === today).length;
 }
 
 function sortedGroups() {
@@ -463,7 +580,7 @@ function computeDailyStreak() {
   let cursor = todayString();
   while (plusDays.includes(cursor)) {
     streak += 1;
-    cursor = offsetDateString(-(streak));
+    cursor = offsetDateString(-streak);
   }
   return streak;
 }
@@ -479,7 +596,8 @@ function formatDateHeading(dateString) {
 
 function formatTime(timeString) {
   const [hours, minutes] = timeString.split(':').map(Number);
-  const d = new Date(); d.setHours(hours, minutes, 0, 0);
+  const d = new Date();
+  d.setHours(hours, minutes, 0, 0);
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
 }
 

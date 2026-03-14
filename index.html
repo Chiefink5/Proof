@@ -15,7 +15,11 @@
         <p class="eyebrow">Personal chore action logger</p>
         <h1>Chore Logger</h1>
       </div>
-      <button id="openManualBtn" class="ghost-btn">Manual Entry</button>
+      <div class="header-actions">
+        <button id="collapseAllBtn" class="ghost-btn">Collapse All</button>
+        <button id="expandAllBtn" class="ghost-btn">Expand All</button>
+        <button id="openManualBtn" class="primary-btn">Manual Entry</button>
+      </div>
     </header>
 
     <nav class="tabs">
@@ -79,10 +83,15 @@
             Collapse groups by default
           </label>
           <div class="toolbar two-col">
-            <button id="seedDataBtn" class="ghost-btn">Load Demo Data</button>
+            <button id="restoreDefaultsBtn" class="ghost-btn">Restore Starter Template</button>
             <button id="resetDataBtn" class="danger-btn">Wipe All Data</button>
           </div>
-          <p class="muted small">Everything saves locally on this device in your browser.</p>
+          <div class="toolbar two-col">
+            <button id="exportDataBtn" class="primary-btn">Export Backup</button>
+            <label class="ghost-btn file-label" for="importDataInput">Import Backup</label>
+            <input id="importDataInput" type="file" accept="application/json" class="hidden" />
+          </div>
+          <p class="muted small">Starter template only seeds when storage is empty, so code updates stop wiping your setup. Export backups before any big changes.</p>
         </div>
       </section>
     </main>
@@ -121,9 +130,12 @@
   <template id="groupCardTemplate">
     <article class="card group-card">
       <div class="group-head">
-        <div>
+        <div class="group-heading-copy">
           <h2 class="group-name"></h2>
-          <p class="muted small group-meta"></p>
+          <div class="group-heading-meta">
+            <p class="muted small group-meta"></p>
+            <span class="group-pill group-today">0 today</span>
+          </div>
         </div>
         <button class="icon-btn toggle-group" title="Collapse or expand">⌄</button>
       </div>

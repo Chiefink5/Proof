@@ -1,0 +1,10 @@
+{
+  "name": "Chore Logger",
+  "short_name": "ChoreLogger",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "description": "Personal chore action logger with nested sub-chores and timestamped logs",
+  "icons": []
+}

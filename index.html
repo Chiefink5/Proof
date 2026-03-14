@@ -3,9 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chore Logger v6</title>
+  <title>Chore Logger v8</title>
   <meta name="theme-color" content="#07111f" />
-  <link rel="stylesheet" href="styles.css?v=6.1.0" />
+  <link rel="stylesheet" href="styles.css?v=8.0.0" />
+  <link rel="manifest" href="manifest.json?v=8.0.0" />
+  <meta name="theme-color" content="#00f6ff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Chore Logger" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=8.0.0" />
+
 </head>
 <body>
   <div class="app-shell">
@@ -13,8 +20,8 @@
       <p class="eyebrow">PERSONAL CHORE ACTION LOGGER</p>
       <div class="hero-row">
         <div>
-          <h1>Chore Logger <span class="version-pill">v6</span></h1>
-          <p class="subtle">v5 + swipe logging. Nothing else gutted.</p>
+          <h1>Chore Logger <span class="version-pill">v8</span></h1>
+          <p class="subtle">Cyberpunk PWA edition. Installable, offline-capable, still full-featured.</p>
         </div>
       </div>
 
@@ -22,9 +29,11 @@
         <button class="btn btn-primary" id="manualEntryBtnTop">Manual Entry</button>
         <button class="btn" id="collapseAllBtn">Collapse All</button>
         <button class="btn" id="expandAllBtn">Expand All</button>
+        <button class="btn" id="installAppBtn" class="btn hidden">Install App</button>
       </div>
 
       <div id="toast" class="toast" aria-live="polite"></div>
+      <p id="installHint" class="install-hint hidden">On iPhone: Share → Add to Home Screen</p>
     </header>
 
     <nav class="tabs" aria-label="Main tabs">
@@ -210,6 +219,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=6.1.0"></script>
+  <script src="app.js?v=8.0.0"></script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 
-const STORAGE_KEY = "chore_logger_v6_data";
+const STORAGE_KEY = "chore_logger_v8_data";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
 const STARTER_TEMPLATE = {
-  version: 6,
+  version: 8,
   settings: { collapseDefault: false },
   filters: { range: "all" },
   groups: [
@@ -78,15 +78,13 @@ function normalizeState(parsed) {
 }
 
 function loadState() {
-  const old = localStorage.getItem("chore_logger_v5_data");
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try { return normalizeState(JSON.parse(raw)); } catch {}
-  }
-  if (old) {
+  const previousKeys = ["chore_logger_v8_data", "chore_logger_v6_data", "chore_logger_v5_data"];
+  for (const key of previousKeys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
     try {
-      const parsed = normalizeState(JSON.parse(old));
-      parsed.version = 6;
+      const parsed = normalizeState(JSON.parse(raw));
+      parsed.version = 8;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       return parsed;
     } catch {}
@@ -156,7 +154,48 @@ function addLog({ groupId, choreId, action = "plus", date, time, note = "", manu
     setTimeout(() => sourceBtn.classList.remove("pulse"), 220);
   }
   showToast(`Logged: ${group.name} / ${chore.name} ${action === "plus" ? "+" : "-"}`);
-  renderAll();
+  
+let deferredInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById("installAppBtn");
+  if (btn) btn.classList.remove("hidden");
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  showToast("App installed");
+  const btn = document.getElementById("installAppBtn");
+  if (btn) btn.classList.add("hidden");
+});
+
+const installBtn = document.getElementById("installAppBtn");
+if (installBtn) {
+  installBtn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      try { await deferredInstallPrompt.userChoice; } catch {}
+      deferredInstallPrompt = null;
+      return;
+    }
+    const hint = document.getElementById("installHint");
+    if (hint) hint.classList.remove("hidden");
+    showToast("On iPhone: Share → Add to Home Screen");
+  });
+  const iosLike = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (iosLike && !isStandalone) installBtn.classList.remove("hidden");
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js?v=8.0.0");
+  });
+}
+
+renderAll();
 }
 
 function getStats() {

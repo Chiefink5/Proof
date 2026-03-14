@@ -449,3 +449,10 @@ button, input, select { font: inherit; }
   .btn, .tab { width: 100%; }
   .group-open { width: 52px; height: 52px; }
 }
+
+
+.install-hint {
+  margin-top: 10px;
+  color: var(--muted);
+  text-shadow: 0 0 10px rgba(0,246,255,.12);
+}

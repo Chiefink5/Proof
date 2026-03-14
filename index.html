@@ -1,212 +1,46 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chore Logger v5</title>
-  <meta name="theme-color" content="#07111f" />
-  <link rel="stylesheet" href="styles.css?v=5.0.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chore Logger v6</title>
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
-  <div class="app-shell">
-    <header class="hero">
-      <p class="eyebrow">PERSONAL CHORE ACTION LOGGER</p>
-      <div class="hero-row">
-        <div>
-          <h1>Chore Logger <span class="version-pill">v5</span></h1>
-          <p class="subtle">Cleaner flow, better filters, stronger proof.</p>
-        </div>
-      </div>
 
-      <div class="top-actions">
-        <button class="btn btn-primary" id="manualEntryBtnTop">Manual Entry</button>
-        <button class="btn" id="collapseAllBtn">Collapse All</button>
-        <button class="btn" id="expandAllBtn">Expand All</button>
-      </div>
+<div class="app">
 
-      <div id="toast" class="toast" aria-live="polite"></div>
-    </header>
+<header class="header">
+<h1>Chore Logger <span class="pill">v6</span></h1>
+<p class="sub">Swipe → log actions</p>
+</header>
 
-    <nav class="tabs" aria-label="Main tabs">
-      <button class="tab active" data-tab="home">Home</button>
-      <button class="tab" data-tab="group">Group</button>
-      <button class="tab" data-tab="log">Log</button>
-      <button class="tab" data-tab="manage">Manage</button>
-      <button class="tab" data-tab="settings">Settings</button>
-    </nav>
+<nav class="tabs">
+<button data-tab="home" class="tab active">Home</button>
+<button data-tab="group" class="tab">Group</button>
+<button data-tab="log" class="tab">Log</button>
+</nav>
 
-    <main>
-      <section id="homeTab" class="tab-panel active">
-        <div class="stats-card">
-          <div class="stat-block">
-            <span class="stat-label">Today</span>
-            <strong id="todayCount">0</strong>
-          </div>
-          <div class="stat-block">
-            <span class="stat-label">This week</span>
-            <strong id="weekCount">0</strong>
-          </div>
-          <div class="stat-block">
-            <span class="stat-label">Daily streak</span>
-            <strong id="streakCount">0</strong>
-          </div>
-        </div>
-        <div id="homeGroups" class="card-stack"></div>
-      </section>
+<section id="home" class="panel active">
+<div id="groupList"></div>
+</section>
 
-      <section id="groupTab" class="tab-panel">
-        <div class="group-header card">
-          <button class="ghost-back" id="backToHomeBtn">← Back</button>
-          <div>
-            <h2 id="groupTitle">Select a group</h2>
-            <p class="subtle" id="groupSubtitle">Tap a group from Home.</p>
-          </div>
-        </div>
-        <div id="groupChores" class="card-stack"></div>
-      </section>
+<section id="group" class="panel">
+<button id="backBtn">← Back</button>
+<h2 id="groupTitle"></h2>
+<div id="choreList"></div>
+</section>
 
-      <section id="logTab" class="tab-panel">
-        <div class="card">
-          <h2>Log</h2>
-          <div class="log-filters">
-            <input type="search" id="logSearch" placeholder="Search logs..." />
-            <select id="logGroupFilter">
-              <option value="">All groups</option>
-            </select>
-            <select id="logActionFilter">
-              <option value="">All actions</option>
-              <option value="plus">Only +</option>
-              <option value="minus">Only -</option>
-            </select>
-          </div>
-          <div class="quick-filter-row">
-            <button class="chip active" data-range="all">All Time</button>
-            <button class="chip" data-range="today">Today</button>
-            <button class="chip" data-range="week">This Week</button>
-            <button class="chip" data-range="custom">Custom</button>
-          </div>
-          <div class="date-range-row hidden" id="customDateRow">
-            <input type="date" id="logDateFrom" />
-            <input type="date" id="logDateTo" />
-          </div>
-        </div>
-        <div id="logList" class="card-stack"></div>
-      </section>
+<section id="log" class="panel">
+<h2>Log</h2>
+<div id="logList"></div>
+</section>
 
-      <section id="manageTab" class="tab-panel">
-        <div class="card">
-          <h2>Manage Groups</h2>
-          <form id="groupForm" class="inline-form">
-            <input id="newGroupName" type="text" placeholder="New group name" maxlength="60" />
-            <button class="btn btn-primary" type="submit">Add Group</button>
-          </form>
-        </div>
-        <div id="manageGroups" class="card-stack"></div>
-      </section>
+<div id="toast"></div>
 
-      <section id="settingsTab" class="tab-panel">
-        <div class="card settings-card">
-          <h2>Settings</h2>
-          <label class="check-row">
-            <input id="collapseDefaultToggle" type="checkbox" />
-            <span>Collapse groups by default on Home</span>
-          </label>
-          <div class="settings-actions">
-            <button class="btn" id="restoreTemplateBtn">Restore Starter Template</button>
-            <button class="btn" id="exportBtn">Export Backup</button>
-            <label class="btn file-btn">
-              Import Backup
-              <input id="importInput" type="file" accept="application/json" />
-            </label>
-            <button class="btn" id="backupSelfTestBtn">Backup Self-Test</button>
-            <button class="btn danger" id="wipeDataBtn">Wipe All Data</button>
-          </div>
-          <p class="subtle">Everything saves locally in this browser on this device.</p>
-        </div>
-      </section>
-    </main>
-  </div>
+</div>
 
-  <dialog id="manualDialog" class="modal">
-    <form method="dialog" class="modal-card" id="manualForm">
-      <div class="modal-head">
-        <h3 id="manualTitle">Manual Entry</h3>
-        <button type="button" class="icon-btn" id="closeManualDialog">✕</button>
-      </div>
-      <div class="form-grid">
-        <label>
-          Group
-          <select id="manualGroup" required></select>
-        </label>
-        <label>
-          Sub-chore
-          <select id="manualChore" required></select>
-        </label>
-        <label>
-          Action
-          <select id="manualAction">
-            <option value="plus">+</option>
-            <option value="minus">-</option>
-          </select>
-        </label>
-        <label>
-          Date
-          <input type="date" id="manualDate" required />
-        </label>
-        <label>
-          Time
-          <div class="input-with-btn">
-            <input type="time" id="manualTime" required />
-            <button type="button" class="mini-btn" id="manualNowBtn">Now</button>
-          </div>
-        </label>
-        <label class="full">
-          Note
-          <input type="text" id="manualNote" maxlength="140" placeholder="Optional note" />
-        </label>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" id="cancelManualDialog">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Entry</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="editLogDialog" class="modal">
-    <form method="dialog" class="modal-card" id="editLogForm">
-      <div class="modal-head">
-        <h3>Edit Log Entry</h3>
-        <button type="button" class="icon-btn" id="closeEditDialog">✕</button>
-      </div>
-      <input type="hidden" id="editLogId" />
-      <div class="form-grid">
-        <label>
-          Action
-          <select id="editAction">
-            <option value="plus">+</option>
-            <option value="minus">-</option>
-          </select>
-        </label>
-        <label>
-          Date
-          <input type="date" id="editDate" required />
-        </label>
-        <label>
-          Time
-          <input type="time" id="editTime" required />
-        </label>
-        <label class="full">
-          Note
-          <input type="text" id="editNote" maxlength="140" placeholder="Optional note" />
-        </label>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn" id="cancelEditDialog">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-      </div>
-    </form>
-  </dialog>
-
-  <script src="app.js?v=5.0.0"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

@@ -1,10 +1,10 @@
-const CACHE_NAME = "chore-logger-v8-cache";
+const CACHE_NAME = "chore-logger-v9-cache";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=8.0.0",
-  "./app.js?v=8.0.0",
-  "./manifest.json?v=8.0.0",
+  "./styles.css?v=9.0.0",
+  "./app.js?v=9.0.0",
+  "./manifest.json?v=9.0.0",
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png"

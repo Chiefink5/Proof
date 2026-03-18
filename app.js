@@ -1,12 +1,12 @@
 
-const STORAGE_KEY = "chore_logger_v8_data";
+const STORAGE_KEY = "chore_logger_v9_data";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
 const STARTER_TEMPLATE = {
-  version: 8,
+  version: 9,
   settings: { collapseDefault: false },
   filters: { range: "all" },
   groups: [
@@ -73,18 +73,19 @@ function normalizeState(parsed) {
   parsed.logs ||= [];
   parsed.ui ||= { selectedGroupId: null, collapsedGroups: {}, lastManualGroupId: null };
   parsed.ui.collapsedGroups ||= {};
-  parsed.filters ||= { range: "all" };
+  parsed.filters ||= { range: "all", logView: "activity" };
+  parsed.filters.logView ||= "activity";
   return parsed;
 }
 
 function loadState() {
-  const previousKeys = ["chore_logger_v8_data", "chore_logger_v6_data", "chore_logger_v5_data"];
+  const previousKeys = ["chore_logger_v9_data", "chore_logger_v8_data", "chore_logger_v6_data", "chore_logger_v5_data"];
   for (const key of previousKeys) {
     const raw = localStorage.getItem(key);
     if (!raw) continue;
     try {
       const parsed = normalizeState(JSON.parse(raw));
-      parsed.version = 8;
+      parsed.version = 9;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       return parsed;
     } catch {}
@@ -441,10 +442,12 @@ function getFilteredLogs() {
   });
 }
 
+
 function renderLogs() {
   const list = document.getElementById("logList");
   list.innerHTML = "";
   const logs = getFilteredLogs();
+  const logView = state.filters.logView || "activity";
 
   if (!logs.length) {
     const empty = document.createElement("div");
@@ -454,37 +457,114 @@ function renderLogs() {
     return;
   }
 
-  const grouped = {};
-  logs.forEach(log => {
-    if (!grouped[log.date]) grouped[log.date] = [];
-    grouped[log.date].push(log);
-  });
-
-  Object.keys(grouped).sort((a,b) => b.localeCompare(a)).forEach(date => {
-    const dayWrap = document.createElement("section");
-    dayWrap.className = "day-group";
-    dayWrap.innerHTML = `<h3 class="day-heading">${formatDate(date)}</h3>`;
-    grouped[date].forEach(log => {
-      const card = document.createElement("article");
-      card.className = "log-card";
-      card.innerHTML = `
-        <div class="log-top">
-          <div>
-            <h4>${escapeHtml(log.choreName)}</h4>
-            <p>${escapeHtml(log.groupName)}</p>
-          </div>
-          <div class="pill ${log.action}">${log.action === "plus" ? "+" : "-"} • ${formatDateTime(log.date, log.time)}</div>
-        </div>
-        ${log.note ? `<p>${escapeHtml(log.note)}</p>` : ""}
-        <div class="log-actions">
-          <button class="btn" data-edit-log="${log.id}">Edit</button>
-          <button class="btn danger" data-delete-log="${log.id}">Delete</button>
-        </div>
-      `;
-      dayWrap.appendChild(card);
+  if (logView === "activity") {
+    const grouped = {};
+    logs.forEach(log => {
+      if (!grouped[log.date]) grouped[log.date] = [];
+      grouped[log.date].push(log);
     });
-    list.appendChild(dayWrap);
-  });
+
+    Object.keys(grouped).sort((a,b) => b.localeCompare(a)).forEach(date => {
+      const dayWrap = document.createElement("section");
+      dayWrap.className = "day-group";
+      dayWrap.innerHTML = `<h3 class="day-heading">${formatDate(date)}</h3>`;
+      grouped[date].forEach(log => {
+        const card = document.createElement("article");
+        card.className = "log-card";
+        card.innerHTML = `
+          <div class="log-top">
+            <div>
+              <h4>${escapeHtml(log.choreName)}</h4>
+              <p>${escapeHtml(log.groupName)}</p>
+            </div>
+            <div class="pill ${log.action}">${log.action === "plus" ? "+" : "-"} • ${formatDateTime(log.date, log.time)}</div>
+          </div>
+          ${log.note ? `<p>${escapeHtml(log.note)}</p>` : ""}
+          <div class="log-actions">
+            <button class="btn" data-edit-log="${log.id}">Edit</button>
+            <button class="btn danger" data-delete-log="${log.id}">Delete</button>
+          </div>
+        `;
+        dayWrap.appendChild(card);
+      });
+      list.appendChild(dayWrap);
+    });
+  } else if (logView === "chore") {
+    const grouped = {};
+    logs.forEach(log => {
+      const key = `${log.groupId}::${log.choreId}`;
+      if (!grouped[key]) grouped[key] = {
+        groupName: log.groupName,
+        choreName: log.choreName,
+        logs: []
+      };
+      grouped[key].logs.push(log);
+    });
+
+    Object.values(grouped)
+      .sort((a, b) => b.logs.length - a.logs.length || a.choreName.localeCompare(b.choreName))
+      .forEach(item => {
+        const card = document.createElement("article");
+        card.className = "summary-card";
+        const uniqueDates = [...new Set(item.logs.map(log => log.date))].sort((a,b) => b.localeCompare(a));
+        const latest = item.logs.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt))[0];
+        const plusCount = item.logs.filter(log => log.action === "plus").length;
+        const minusCount = item.logs.filter(log => log.action === "minus").length;
+
+        card.innerHTML = `
+          <h3>${escapeHtml(item.choreName)}</h3>
+          <p class="subtle">${escapeHtml(item.groupName)}</p>
+          <div class="summary-meta">
+            <div class="pill">Times completed: ${plusCount}</div>
+            <div class="pill">Corrections: ${minusCount}</div>
+            <div class="pill">${latest ? `Last: ${formatDateTime(latest.date, latest.time)}` : "No logs yet"}</div>
+          </div>
+          <div class="summary-dates">
+            ${uniqueDates.slice(0, 8).map(date => {
+              const count = item.logs.filter(log => log.date === date && log.action === "plus").length;
+              const corrections = item.logs.filter(log => log.date === date && log.action === "minus").length;
+              return `<div class="summary-date-row"><strong>${formatDate(date)}</strong><span>+${count}${corrections ? ` / -${corrections}` : ""}</span></div>`;
+            }).join("")}
+          </div>
+          ${uniqueDates.length > 8 ? `<p class="summary-empty">+ ${uniqueDates.length - 8} more dates</p>` : ""}
+        `;
+        list.appendChild(card);
+      });
+  } else {
+    const grouped = {};
+    logs.forEach(log => {
+      const d = new Date(`${log.date}T00:00:00`);
+      const wk = getWeekNumber(d);
+      const key = `Week ${wk.week}`;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(log);
+    });
+
+    Object.keys(grouped)
+      .sort((a,b) => parseInt(b.replace("Week ",""), 10) - parseInt(a.replace("Week ",""), 10))
+      .forEach(weekKey => {
+        const card = document.createElement("article");
+        card.className = "summary-card";
+        const entries = grouped[weekKey].slice().sort((a,b) => {
+          if (a.date === b.date) return a.time.localeCompare(b.time);
+          return b.date.localeCompare(a.date);
+        });
+
+        card.innerHTML = `
+          <h3>${weekKey}</h3>
+          <p class="subtle">${entries.length} log${entries.length === 1 ? "" : "s"}</p>
+          <div class="weekly-list">
+            ${entries.map(log => `
+              <div class="weekly-row">
+                <strong>${formatDate(log.date)}</strong>
+                <span>${escapeHtml(log.choreName)} ${log.action === "plus" ? "+" : "-"}</span>
+              </div>
+            `).join("")}
+          </div>
+        `;
+        list.appendChild(card);
+      });
+  }
 
   list.querySelectorAll("[data-delete-log]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -500,6 +580,15 @@ function renderLogs() {
   list.querySelectorAll("[data-edit-log]").forEach(btn => {
     btn.addEventListener("click", () => openEditDialog(btn.dataset.editLog));
   });
+}
+
+function getWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return { year: d.getUTCFullYear(), week: weekNum };
 }
 
 function renderManage() {
@@ -737,6 +826,14 @@ function setRange(range) {
   renderLogs();
 }
 
+
+function setLogView(view) {
+  state.filters.logView = view;
+  saveState();
+  document.querySelectorAll("[data-log-view]").forEach(btn => btn.classList.toggle("active", btn.dataset.logView === view));
+  renderLogs();
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -752,6 +849,7 @@ function renderAll() {
   renderManage();
   document.getElementById("collapseDefaultToggle").checked = !!state.settings.collapseDefault;
   document.querySelectorAll("[data-range]").forEach(btn => btn.classList.toggle("active", btn.dataset.range === (state.filters.range || "all")));
+  document.querySelectorAll("[data-log-view]").forEach(btn => btn.classList.toggle("active", btn.dataset.logView === (state.filters.logView || "activity")));
   document.getElementById("customDateRow").classList.toggle("hidden", (state.filters.range || "all") !== "custom");
 }
 
@@ -823,6 +921,7 @@ document.getElementById("logActionFilter").addEventListener("change", renderLogs
 document.getElementById("logDateFrom").addEventListener("change", renderLogs);
 document.getElementById("logDateTo").addEventListener("change", renderLogs);
 document.querySelectorAll("[data-range]").forEach(btn => btn.addEventListener("click", () => setRange(btn.dataset.range)));
+document.querySelectorAll("[data-log-view]").forEach(btn => btn.addEventListener("click", () => setLogView(btn.dataset.logView)));
 
 document.getElementById("restoreTemplateBtn").addEventListener("click", restoreStarterTemplate);
 document.getElementById("exportBtn").addEventListener("click", exportBackup);

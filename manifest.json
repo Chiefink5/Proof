@@ -1,7 +1,7 @@
 {
   "name": "Chore Logger",
   "short_name": "Chores",
-  "description": "Cyberpunk chore logger with swipe logging, logs, filters, and backups.",
+  "description": "Cyberpunk chore logger with better log views.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -155,48 +155,7 @@ function addLog({ groupId, choreId, action = "plus", date, time, note = "", manu
     setTimeout(() => sourceBtn.classList.remove("pulse"), 220);
   }
   showToast(`Logged: ${group.name} / ${chore.name} ${action === "plus" ? "+" : "-"}`);
-  
-let deferredInstallPrompt = null;
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  const btn = document.getElementById("installAppBtn");
-  if (btn) btn.classList.remove("hidden");
-});
-
-window.addEventListener("appinstalled", () => {
-  deferredInstallPrompt = null;
-  showToast("App installed");
-  const btn = document.getElementById("installAppBtn");
-  if (btn) btn.classList.add("hidden");
-});
-
-const installBtn = document.getElementById("installAppBtn");
-if (installBtn) {
-  installBtn.addEventListener("click", async () => {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      try { await deferredInstallPrompt.userChoice; } catch {}
-      deferredInstallPrompt = null;
-      return;
-    }
-    const hint = document.getElementById("installHint");
-    if (hint) hint.classList.remove("hidden");
-    showToast("On iPhone: Share → Add to Home Screen");
-  });
-  const iosLike = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
-  if (iosLike && !isStandalone) installBtn.classList.remove("hidden");
-}
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=8.0.0");
-  });
-}
-
-renderAll();
+  renderAll();
 }
 
 function getStats() {
@@ -591,6 +550,83 @@ function getWeekNumber(date) {
   return { year: d.getUTCFullYear(), week: weekNum };
 }
 
+function formatLongDate(dateString) {
+  const dt = new Date(dateString + "T00:00:00");
+  return dt.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+}
+
+function formatTimeOnly(timeString) {
+  const dt = new Date(`2000-01-01T${timeString}`);
+  return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function exportProofReport() {
+  const logs = getFilteredLogs().slice().sort((a, b) => {
+    if (a.date === b.date) return a.time.localeCompare(b.time);
+    return a.date.localeCompare(b.date);
+  });
+
+  if (!logs.length) {
+    showToast("No logs to export");
+    return;
+  }
+
+  const grouped = {};
+  logs.forEach(log => {
+    if (!grouped[log.date]) grouped[log.date] = [];
+    grouped[log.date].push(log);
+  });
+
+  const dates = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const firstDate = formatLongDate(dates[0]);
+  const lastDate = formatLongDate(dates[dates.length - 1]);
+
+  const rowsHtml = dates.map(date => {
+    const items = grouped[date].map(log => {
+      const correction = log.action === "minus" ? ' <span class="correction">(Correction)</span>' : '';
+      const note = log.note ? `<div class="note">${escapeHtml(log.note)}</div>` : '';
+      return `<li><span class="chore-name">${escapeHtml(log.choreName)}</span><span class="time">${formatTimeOnly(log.time)}</span>${correction}${note}</li>`;
+    }).join('');
+    return `<section class="day-block"><h2>${formatLongDate(date)}</h2><ul>${items}</ul></section>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chore Proof Report</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #111827; background: #ffffff; }
+  h1 { margin: 0 0 8px; font-size: 28px; }
+  .range { color: #4b5563; margin-bottom: 24px; }
+  .day-block { margin-bottom: 24px; page-break-inside: avoid; }
+  .day-block h2 { font-size: 20px; margin: 0 0 10px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+  .chore-name { font-weight: 600; }
+  .time { margin-left: 8px; color: #374151; }
+  .correction { color: #b91c1c; font-size: 13px; margin-left: 8px; }
+  .note { color: #6b7280; font-size: 13px; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <h1>Chore Log Report</h1>
+  <div class="range">Date Range: ${firstDate} – ${lastDate}</div>
+  ${rowsHtml}
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `chore-proof-report-${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Proof report exported");
+}
+
 function renderManage() {
   const container = document.getElementById("manageGroups");
   container.innerHTML = "";
@@ -778,7 +814,7 @@ function importBackup(file) {
       const parsed = normalizeState(JSON.parse(reader.result));
       if (!Array.isArray(parsed.groups) || !Array.isArray(parsed.logs)) throw new Error("Invalid backup");
       state = parsed;
-      state.version = 6;
+      state.version = 9;
       saveState();
       renderAll();
       showToast("Backup imported");
@@ -925,6 +961,7 @@ document.querySelectorAll("[data-log-view]").forEach(btn => btn.addEventListener
 
 document.getElementById("restoreTemplateBtn").addEventListener("click", restoreStarterTemplate);
 document.getElementById("exportBtn").addEventListener("click", exportBackup);
+document.getElementById("exportProofBtn").addEventListener("click", exportProofReport);
 document.getElementById("importInput").addEventListener("change", (e) => importBackup(e.target.files[0]));
 document.getElementById("wipeDataBtn").addEventListener("click", wipeAllData);
 document.getElementById("backupSelfTestBtn").addEventListener("click", backupSelfTest);
@@ -933,6 +970,47 @@ document.getElementById("collapseDefaultToggle").addEventListener("change", (e) 
   saveState();
   showToast("Default collapse setting updated");
 });
+
+
+let deferredInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById("installAppBtn");
+  if (btn) btn.classList.remove("hidden");
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  showToast("App installed");
+  const btn = document.getElementById("installAppBtn");
+  if (btn) btn.classList.add("hidden");
+});
+
+const installBtn = document.getElementById("installAppBtn");
+if (installBtn) {
+  installBtn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      try { await deferredInstallPrompt.userChoice; } catch {}
+      deferredInstallPrompt = null;
+      return;
+    }
+    const hint = document.getElementById("installHint");
+    if (hint) hint.classList.remove("hidden");
+    showToast("On iPhone: Share → Add to Home Screen");
+  });
+  const iosLike = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (iosLike && !isStandalone) installBtn.classList.remove("hidden");
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js?v=9.1.0");
+  });
+}
 
 (function applyDefaultCollapse() {
   if (Object.keys(state.ui.collapsedGroups || {}).length === 0) {
